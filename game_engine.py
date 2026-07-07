@@ -58,7 +58,7 @@ class GameEngine:
             self.selected_cell = (row, col)
         else:
             # Rule: Clicking another cell sends a move request from selected piece to that cell
-            if selected_piece.is_legal_move(sel_row, sel_col, row, col):
+            if selected_piece.is_legal_move(self.board, sel_row, sel_col, row, col):
                 self._execute_move(sel_row, sel_col, row, col)
 
             self.selected_cell = None  # Clear selection after the move action

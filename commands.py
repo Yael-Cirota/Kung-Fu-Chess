@@ -50,6 +50,8 @@ class CommandParser:
                 return WaitCommand(int(parts[1]))
             except ValueError as e:
                 return e
+            
+            
         elif " ".join(parts) == "print board":
             return PrintBoardCommand()
             

@@ -1,7 +1,27 @@
+
+
 import sys
 from board_parser import BoardValidator, BoardParser
 from game_engine import GameEngine
 from commands import CommandParser
+from pieces import King, Queen, Rook, Bishop, Knight, Pawn
+
+def create_piece(token: str):
+    """Factory function to convert text tokens into Piece objects."""
+    if token == '.':
+        return None
+    
+    color = token[0]
+    piece_type = token[1]
+    
+    piece_classes = {
+        'K': King, 'Q': Queen, 'R': Rook, 
+        'B': Bishop, 'N': Knight, 'P': Pawn
+    }
+    
+    piece_class = piece_classes.get(piece_type)
+    return piece_class(color) if piece_class else None
+
 
 def main():
     # 1. Standard Input Capture
@@ -21,15 +41,15 @@ def main():
             print(raw_board_string)
         return
 
-    # Turn the validated layout back into a usable dynamic 2D array structure
-    initial_grid = [row.split() for row in raw_board_string.splitlines()]
-
+    # 4. Convert the raw strings into a 2D grid of actual Piece Objects    raw_grid = [row.split() for row in raw_board_string.splitlines()]
+    raw_grid = [row.split() for row in raw_board_string.splitlines()]
+    object_grid = [[create_piece(token) for token in row] for row in raw_grid]
     # 4. Dependency Injection: Pass the board grid state directly to our Engine
-    engine = GameEngine(board_state=initial_grid)
+    engine = GameEngine(board_state=object_grid)
 
-    # 5. Dynamic Streaming of Section Command Lines
-    lines = vpl_input.splitlines()
+    # 6. Dynamic Streaming of Section Command Lines
     commands_started = False
+    lines = vpl_input.splitlines()
     
     for line in lines:
         line_str = line.strip()
@@ -46,4 +66,3 @@ def main():
 if __name__ == "__main__":
     main()
 
-    

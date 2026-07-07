@@ -33,11 +33,11 @@ class GameEngine:
         if not self.is_within_bounds(row, col):
             return
 
-        target_token = self.board[row][col]
+        target_piece = self.board[row][col]
 
         # Scenario 1 & 2: No active selection
         if self.selected_cell is None:
-            if target_token != '.':
+            if target_piece is not None:
                 # Rule: Clicking a piece selects it
                 self.selected_cell = (row, col)
             # Rule: Clicking an empty cell with no selection is ignored
@@ -45,24 +45,35 @@ class GameEngine:
 
         # If we reach here, a piece is already selected
         sel_row, sel_col = self.selected_cell
-        selected_token = self.board[sel_row][sel_col]
+        selected_piece = self.board[sel_row][sel_col]
+
+        # Failsafe
+        if selected_piece is None:
+            self.selected_cell = None
+            return
         
         # Determine friendliness based on token's first character color prefix ('w' or 'b')
-        if target_token != '.' and target_token[0] == selected_token[0]:
+        if target_piece is not None and target_piece.color == selected_piece.color:
             # Rule: Clicking another friendly piece replaces the selection
             self.selected_cell = (row, col)
         else:
             # Rule: Clicking another cell sends a move request from selected piece to that cell
-            self._execute_move(sel_row, sel_col, row, col)
+            if selected_piece.is_legal_move(sel_row, sel_col, row, col):
+                self._execute_move(sel_row, sel_col, row, col)
+
             self.selected_cell = None  # Clear selection after the move action
 
     def _execute_move(self, from_row: int, from_col: int, to_row: int, to_col: int):
         """Helper to physically move the token on the board array."""
         piece = self.board[from_row][from_col]
-        self.board[from_row][from_col] = '.'
+        if piece is not None:
+            piece.has_moved = True  # Update the piece's internal state!
+            
+        self.board[from_row][from_col] = None
         self.board[to_row][to_col] = piece
 
     def print_board(self):
         # Rule: Prints the current settled board state after all completed moves
         for row in self.board:
-            print(" ".join(row))
+            row_str = " ".join(piece.get_symbol() if piece is not None else '.' for piece in row)
+            print(row_str)

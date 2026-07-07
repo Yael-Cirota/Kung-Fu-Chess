@@ -125,14 +125,35 @@ class Knight(Piece):
 class Pawn(Piece):
     def get_symbol(self) -> str:
         return f"{self.color}P"
-
+    
     def is_legal_move(self, board: List[List[Optional['Piece']]], from_row: int, from_col: int, to_row: int, to_col: int) -> bool:
-        # Pawns have complex rules (directionality, attacks vs. moves, en passant).
-        # Returning True as a placeholder for this iteration.
-        dr = abs(to_row - from_row)
-        dc = abs(to_col - from_col)
+        dr = to_row - from_row
+        dc = to_col - from_col
         
+        # A pawn must actually move
         if dr == 0 and dc == 0:
             return False
             
-        return True
+        # Determine movement direction based on color:
+        # Assuming standard grid where row 0 is at the top.
+        # White ('w') moves UP (decreasing row index -> -1)
+        # Black ('b') moves DOWN (increasing row index -> +1)
+        direction = -1 if self.color == 'w' else 1
+
+        # 1. Standard Forward Move
+        if dc == 0 and dr == direction:
+            # Pawns cannot capture forward; the target cell must be completely empty
+            if board[to_row][to_col] is None:
+                return True
+            return False
+
+        # 2. Diagonal Capture
+        if abs(dc) == 1 and dr == direction:
+            # Pawns can only move diagonally if they are capturing an opponent's piece
+            target_piece = board[to_row][to_col]
+            if target_piece is not None and target_piece.color != self.color:
+                return True
+            return False
+
+        # Any other move (including moving 2 cells, moving backward, or sideways) is illegal
+        return False

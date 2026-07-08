@@ -178,7 +178,69 @@ class TestHandleClickMovement:
 
 
 # ==========================================
-# 5. SCHEDULE_MOVE & TIMING (New Feature)
+# 5. GAME OVER
+# ==========================================
+
+class TestGameOver:
+    def test_capturing_king_sets_game_over_and_clears_transient_state(self):
+        attacker = Rook('w')
+        king = King('b')
+        engine = make_engine(((0, 0), attacker), ((0, 1), king))
+
+        # Seed state that must be reset when king is captured.
+        engine.selected_cell = (7, 7)
+        engine.pending_moves.append({
+            'piece': attacker,
+            'execute_at': 9999,
+            'from_row': 0,
+            'from_col': 0,
+            'to_row': 0,
+            'to_col': 7,
+        })
+
+        engine._execute_move({
+            'piece': attacker,
+            'execute_at': 0,
+            'from_row': 0,
+            'from_col': 0,
+            'to_row': 0,
+            'to_col': 1,
+        })
+
+        assert engine.game_over is True
+        assert engine.board[0][1] is attacker
+        assert engine.board[0][0] is None
+        assert engine.pending_moves == []
+        assert engine.selected_cell is None
+
+    def test_capturing_non_king_does_not_set_game_over(self):
+        attacker = Rook('w')
+        enemy = Pawn('b')
+        engine = make_engine(((0, 0), attacker), ((0, 1), enemy))
+
+        engine._execute_move({
+            'piece': attacker,
+            'execute_at': 0,
+            'from_row': 0,
+            'from_col': 0,
+            'to_row': 0,
+            'to_col': 1,
+        })
+
+        assert engine.game_over is False
+
+    def test_handle_click_ignored_when_game_is_over(self):
+        king = King('w')
+        engine = make_engine(((0, 0), king))
+        engine.game_over = True
+
+        engine.handle_click(50, 50)
+
+        assert engine.selected_cell is None
+
+
+# ==========================================
+# 6. SCHEDULE_MOVE & TIMING (New Feature)
 # ==========================================
 
 class TestMoveScheduling:
@@ -390,7 +452,7 @@ class TestMoveScheduling:
 
 
 # ==========================================
-# 6. PRINT_BOARD (smoke test)
+# 7. PRINT_BOARD (smoke test)
 # ==========================================
 
 class TestPrintBoard:

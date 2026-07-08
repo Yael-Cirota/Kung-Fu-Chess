@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^d:/cirot/Documents/Kung-Fu-Chess/\\.venv/Scripts/python\\.exe -m pytest --disable-warnings$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

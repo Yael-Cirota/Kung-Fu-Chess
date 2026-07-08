@@ -11,6 +11,7 @@ class GameEngine:
         self.selected_cell: Optional[Tuple[int, int]] = None  # Stores (row, col)
         self.pending_moves = []  # Queue of moves waiting to be executed
         self.movement_tracker = movement_tracker
+        self.game_over = False
 
     @property
     def rows(self) -> int:
@@ -44,6 +45,10 @@ class GameEngine:
             self._execute_move(move)
             
     def handle_click(self, x: int, y: int):
+        # Rule: if the game is over, ignore all clicks
+        if self.game_over:
+            return
+        
         # Rule: Each board cell is 100x100 pixels
         col = x // 100
         row = y // 100
@@ -106,6 +111,11 @@ class GameEngine:
         if target_piece is not None and target_piece.color == piece.color:
             self.abort_move(piece)
             return
+        
+        # 4. Capture Check: Is the target piece a King? If so, the game is over.
+        is_king_captured = False
+        if target_piece is not None and target_piece.get_symbol()[1] == 'K':
+            is_king_captured = True
 
         # --- Execute Validated Move ---
         piece.has_moved = True
@@ -117,6 +127,11 @@ class GameEngine:
         # Release the lock immediately upon arrival (No cooldown)
         if self.movement_tracker is not None:
             self.movement_tracker.set_arrived(piece)
+
+        if is_king_captured:
+            self.game_over = True
+            self.pending_moves.clear()  
+            self.selected_cell = None   
 
     def print_board(self):
         # Rule: Prints the current settled board state after all completed moves

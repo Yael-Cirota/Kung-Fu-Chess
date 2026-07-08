@@ -1,6 +1,7 @@
 import pytest
 from pieces import King, Queen, Rook, Bishop, Knight, Pawn, DEFAULT_MOVE_DELAY_MS
 from game_engine import GameEngine
+from movement_tracker import MovementTracker
 
 
 # ==========================================
@@ -109,6 +110,21 @@ class TestHandleClickSelection:
 
         engine.handle_click(150, 50)  # click (0,1) and trigger failsafe branch
         assert engine.selected_cell is None
+
+    def test_clicking_friendly_moving_piece_keeps_current_selection(self):
+        king = King('w')
+        rook = Rook('w')
+        tracker = MovementTracker()
+        tracker.set_moving(rook)
+        engine = GameEngine(empty_board(), movement_tracker=tracker)
+        engine.board[0][0] = king
+        engine.board[0][1] = rook
+
+        engine.handle_click(50, 50)   # select king at (0,0)
+        engine.handle_click(150, 50)  # click moving rook at (0,1)
+
+        # Selection does not change because target friendly piece is in transit.
+        assert engine.selected_cell == (0, 0)
 
 
 # ==========================================
@@ -231,6 +247,22 @@ class TestMoveScheduling:
         engine.advance_clock(1000)
         assert engine.board[0][0] is None     # Left start
         assert engine.board[0][2] is rook     # Arrived at destination
+
+    def test_execute_move_calls_tracker_set_arrived_with_none_when_origin_empty(self):
+        class SpyTracker:
+            def __init__(self):
+                self.arrivals = []
+
+            def set_arrived(self, piece):
+                self.arrivals.append(piece)
+
+        tracker = SpyTracker()
+        engine = GameEngine(empty_board(), movement_tracker=tracker)
+
+        # Execute move from an empty origin directly to hit the branch where piece is None.
+        engine._execute_move(0, 0, 0, 1)
+
+        assert tracker.arrivals == [None]
 
 
 # ==========================================

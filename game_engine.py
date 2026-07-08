@@ -41,8 +41,8 @@ class GameEngine:
         
         # Physically execute each matured move on the board
         for move in ready_moves:
-            self._execute_move(move['from_row'], move['from_col'], move['to_row'], move['to_col'])
-
+            self._execute_move(move)
+            
     def handle_click(self, x: int, y: int):
         # Rule: Each board cell is 100x100 pixels
         col = x // 100
@@ -80,16 +80,37 @@ class GameEngine:
         else:
             # Rule: Clicking another cell sends a move request from selected piece to that cell
             if selected_piece.is_legal_move(self.board, sel_row, sel_col, row, col):
-                self._schedule_move(selected_piece, sel_row, sel_col, row, col)
+                self.schedule_move(selected_piece, sel_row, sel_col, row, col)
 
             self.selected_cell = None  # Clear selection after the move action
 
-    def _execute_move(self, from_row: int, from_col: int, to_row: int, to_col: int):
+    def _execute_move(self, move: dict):        
         """Helper to physically move the token on the board array."""
-        piece = self.board[from_row][from_col]
-        if piece is not None:
-            piece.has_moved = True  # Update the piece's internal state!
-            
+
+        from_row, from_col = move['from_row'], move['from_col']
+        to_row, to_col = move['to_row'], move['to_col']
+        piece = move['piece']
+
+        # 1. Invalid Premove Check: Is the original piece still exactly where it started?
+        if self.board[from_row][from_col] is not piece:
+            self.abort_move(piece)
+            return
+
+        # 2. Movement Conflict Check: Is the path STILL legal and clear?
+        if not piece.is_legal_move(self.board, from_row, from_col, to_row, to_col):
+            self.abort_move(piece)
+            return
+
+        # 3. Friendly-Piece Landing Check: Did a friendly piece move to the destination?
+        target_piece = self.board[to_row][to_col]
+        if target_piece is not None and target_piece.color == piece.color:
+            self.abort_move(piece)
+            return
+
+        # --- Execute Validated Move ---
+        piece.has_moved = True
+
+        # If there's an enemy piece on the target, it gets overwritten (Captured)
         self.board[from_row][from_col] = None
         self.board[to_row][to_col] = piece
 
@@ -103,7 +124,12 @@ class GameEngine:
             row_str = " ".join(piece.get_symbol() if piece is not None else '.' for piece in row)
             print(row_str)
 
-    def _schedule_move(self, piece, from_row: int, from_col: int, to_row: int, to_col: int):
+    def abort_move(self, piece):
+        """Helper to safely cancel a move and release its movement lock."""
+        if self.movement_tracker is not None:
+            self.movement_tracker.set_arrived(piece)
+
+    def schedule_move(self, piece, from_row: int, from_col: int, to_row: int, to_col: int):
         """Calculates distance and schedules the move in the pending queue."""
         dr = abs(to_row - from_row)
         dc = abs(to_col - from_col)
@@ -116,9 +142,14 @@ class GameEngine:
         target_time = self.clock_ms + total_move_time
 
         self.pending_moves.append({
+            'piece': piece,
             'execute_at': target_time,
             'from_row': from_row,
             'from_col': from_col,
             'to_row': to_row,
             'to_col': to_col
         })
+
+        # Mark piece as moving immediately upon scheduling
+        if self.movement_tracker is not None:
+            self.movement_tracker.set_moving(piece)

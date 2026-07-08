@@ -182,7 +182,7 @@ class TestHandleClickMovement:
 # ==========================================
 
 class TestMoveScheduling:
-    def test_schedule_move_distance_one(self):
+    def testschedule_move_distance_one(self):
         """Test that moving 1 cell schedules the move for exactly 1 delay unit."""
         rook = Rook('w')
         engine = make_engine(((0, 0), rook))
@@ -191,7 +191,7 @@ class TestMoveScheduling:
         engine.clock_ms = 500  
         
         # Schedule a move 1 cell down
-        engine._schedule_move(rook, 0, 0, 1, 0)
+        engine.schedule_move(rook, 0, 0, 1, 0)
         
         assert len(engine.pending_moves) == 1
         scheduled = engine.pending_moves[0]
@@ -202,24 +202,24 @@ class TestMoveScheduling:
         # Target time = current clock (500) + (1 cell * 1000ms) = 1500
         assert scheduled['execute_at'] == 1500
 
-    def test_schedule_move_calculates_distance_correctly(self):
+    def testschedule_move_calculates_distance_correctly(self):
         """Test that diagonal multi-cell distance uses the maximum axis difference (Chebyshev distance)."""
         bishop = Bishop('w')
         engine = make_engine(((2, 2), bishop))
         
         # Schedule a move 3 cells diagonally
-        engine._schedule_move(bishop, 2, 2, 5, 5)
+        engine.schedule_move(bishop, 2, 2, 5, 5)
         
         # Distance = max(|5-2|, |5-2|) = 3. Target = 3 * 1000 = 3000
         assert engine.pending_moves[0]['execute_at'] == 3000
 
-    def test_schedule_move_distance_zero_fallback(self):
+    def testschedule_move_distance_zero_fallback(self):
         """Test the safety fallback if a piece is scheduled to move to its own cell."""
         king = King('w')
         engine = make_engine(((4, 4), king))
         
         # Schedule move to the exact same spot
-        engine._schedule_move(king, 4, 4, 4, 4)
+        engine.schedule_move(king, 4, 4, 4, 4)
         
         # Should fallback to distance 1 -> target = 1000 (prevents zero-time instant moves)
         assert engine.pending_moves[0]['execute_at'] == 1000
@@ -248,7 +248,7 @@ class TestMoveScheduling:
         assert engine.board[0][0] is None     # Left start
         assert engine.board[0][2] is rook     # Arrived at destination
 
-    def test_execute_move_calls_tracker_set_arrived_with_none_when_origin_empty(self):
+    def test_execute_move_calls_tracker_set_arrived_when_origin_no_longer_has_piece(self):
         class SpyTracker:
             def __init__(self):
                 self.arrivals = []
@@ -258,11 +258,135 @@ class TestMoveScheduling:
 
         tracker = SpyTracker()
         engine = GameEngine(empty_board(), movement_tracker=tracker)
+        piece = King('w')
 
-        # Execute move from an empty origin directly to hit the branch where piece is None.
-        engine._execute_move(0, 0, 0, 1)
+        # Execute move where the original square no longer contains this piece.
+        engine._execute_move({
+            'piece': piece,
+            'execute_at': 0,
+            'from_row': 0,
+            'from_col': 0,
+            'to_row': 0,
+            'to_col': 1,
+        })
 
-        assert tracker.arrivals == [None]
+        assert tracker.arrivals == [piece]
+
+    def test_execute_move_aborts_when_path_becomes_illegal(self):
+        class SpyTracker:
+            def __init__(self):
+                self.arrivals = []
+
+            def set_arrived(self, piece):
+                self.arrivals.append(piece)
+
+        rook = Rook('w')
+        blocker = Pawn('w')
+        tracker = SpyTracker()
+        engine = GameEngine(empty_board(), movement_tracker=tracker)
+        engine.board[0][0] = rook
+
+        # The move was scheduled when path was clear; then a blocker appears.
+        move = {
+            'piece': rook,
+            'execute_at': 0,
+            'from_row': 0,
+            'from_col': 0,
+            'to_row': 0,
+            'to_col': 2,
+        }
+        engine.board[0][1] = blocker
+
+        engine._execute_move(move)
+
+        assert engine.board[0][0] is rook
+        assert engine.board[0][2] is None
+        assert tracker.arrivals == [rook]
+
+    def test_execute_move_aborts_on_friendly_destination_piece(self):
+        class SpyTracker:
+            def __init__(self):
+                self.arrivals = []
+
+            def set_arrived(self, piece):
+                self.arrivals.append(piece)
+
+        rook = Rook('w')
+        friend = Pawn('w')
+        tracker = SpyTracker()
+        engine = GameEngine(empty_board(), movement_tracker=tracker)
+        engine.board[0][0] = rook
+        engine.board[0][2] = friend
+
+        engine._execute_move({
+            'piece': rook,
+            'execute_at': 0,
+            'from_row': 0,
+            'from_col': 0,
+            'to_row': 0,
+            'to_col': 2,
+        })
+
+        assert engine.board[0][0] is rook
+        assert engine.board[0][2] is friend
+        assert tracker.arrivals == [rook]
+
+    def test_execute_move_without_tracker_still_executes(self):
+        rook = Rook('w')
+        engine = GameEngine(empty_board(), movement_tracker=None)
+        engine.board[0][0] = rook
+
+        engine._execute_move({
+            'piece': rook,
+            'execute_at': 0,
+            'from_row': 0,
+            'from_col': 0,
+            'to_row': 0,
+            'to_col': 1,
+        })
+
+        assert engine.board[0][0] is None
+        assert engine.board[0][1] is rook
+
+    def test_schedule_move_marks_piece_as_moving_when_tracker_exists(self):
+        class SpyTracker:
+            def __init__(self):
+                self.moving = []
+
+            def set_moving(self, piece):
+                self.moving.append(piece)
+
+        rook = Rook('w')
+        tracker = SpyTracker()
+        engine = GameEngine(empty_board(), movement_tracker=tracker)
+
+        engine.schedule_move(rook, 0, 0, 0, 1)
+
+        assert tracker.moving == [rook]
+
+    def test_execute_move_success_calls_tracker_set_arrived(self):
+        class SpyTracker:
+            def __init__(self):
+                self.arrivals = []
+
+            def set_arrived(self, piece):
+                self.arrivals.append(piece)
+
+        rook = Rook('w')
+        tracker = SpyTracker()
+        engine = GameEngine(empty_board(), movement_tracker=tracker)
+        engine.board[0][0] = rook
+
+        engine._execute_move({
+            'piece': rook,
+            'execute_at': 0,
+            'from_row': 0,
+            'from_col': 0,
+            'to_row': 0,
+            'to_col': 1,
+        })
+
+        assert tracker.arrivals == [rook]
 
 
 # ==========================================

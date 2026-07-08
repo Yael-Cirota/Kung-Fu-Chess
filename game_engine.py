@@ -5,11 +5,12 @@ class GameEngine:
     Manages the running game state, coordinate system calculations,
     and piece selection mechanics.
     """
-    def __init__(self, board_state: List[List[str]]):
+    def __init__(self, board_state: List[List[str]], movement_tracker=None):
         self.board = board_state  # 2D list representing the grid
         self.clock_ms = 0
         self.selected_cell: Optional[Tuple[int, int]] = None  # Stores (row, col)
         self.pending_moves = []  # Queue of moves waiting to be executed
+        self.movement_tracker = movement_tracker
 
     @property
     def rows(self) -> int:
@@ -73,12 +74,14 @@ class GameEngine:
         # Determine friendliness based on token's first character color prefix ('w' or 'b')
         if target_piece is not None and target_piece.color == selected_piece.color:
             # Rule: Clicking another friendly piece replaces the selection
+            if self.movement_tracker is not None and self.movement_tracker.is_moving(target_piece):
+                return
             self.selected_cell = (row, col)
         else:
             # Rule: Clicking another cell sends a move request from selected piece to that cell
             if selected_piece.is_legal_move(self.board, sel_row, sel_col, row, col):
                 self._schedule_move(selected_piece, sel_row, sel_col, row, col)
-                
+
             self.selected_cell = None  # Clear selection after the move action
 
     def _execute_move(self, from_row: int, from_col: int, to_row: int, to_col: int):
@@ -89,6 +92,10 @@ class GameEngine:
             
         self.board[from_row][from_col] = None
         self.board[to_row][to_col] = piece
+
+        # Release the lock immediately upon arrival (No cooldown)
+        if self.movement_tracker is not None:
+            self.movement_tracker.set_arrived(piece)
 
     def print_board(self):
         # Rule: Prints the current settled board state after all completed moves

@@ -6,6 +6,7 @@ from board_parser import BoardValidator, BoardParser
 from game_engine import GameEngine
 from commands import CommandParser
 from pieces import King, Queen, Rook, Bishop, Knight, Pawn
+from movement_tracker import MovementTracker
 
 def create_piece(token: str):
     """Factory function to convert text tokens into Piece objects."""
@@ -63,7 +64,13 @@ def run_application(vpl_input: str):
     
     # 3. Initialize Engine
     object_grid = parse_board_grid(raw_board_string)
-    engine = GameEngine(board_state=object_grid)
+    movement_tracker = MovementTracker()
+
+
+    engine = GameEngine(
+        board_state=object_grid, 
+        movement_tracker=movement_tracker
+    )
 
     # 4. Run Commands
     execute_commands(vpl_input, engine)

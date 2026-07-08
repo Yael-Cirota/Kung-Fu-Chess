@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
+DEFAULT_MOVE_DELAY_MS = 1000
+
 class Piece(ABC):
     """
     Abstract Base Class for all chess pieces.
@@ -9,6 +11,7 @@ class Piece(ABC):
     def __init__(self, color: str):
         self.color = color         # 'w' or 'b'
         self.has_moved = False     # Crucial for castling and pawn double-moves
+        self.move_delay_ms = DEFAULT_MOVE_DELAY_MS  # Default move delay
 
     @abstractmethod
     def get_symbol(self) -> str:

@@ -1,5 +1,5 @@
 import pytest
-from pieces import King, Queen, Rook, Bishop, Knight, Pawn
+from pieces import King, Queen, Rook, Bishop, Knight, Pawn, DEFAULT_MOVE_DELAY_MS
 from game_engine import GameEngine
 
 
@@ -121,6 +121,7 @@ class TestHandleClickMovement:
         engine = make_engine(((4, 0), rook))
         engine.handle_click(50, 450)   # select rook at (4,0)
         engine.handle_click(750, 450)  # move to (4,7)
+        engine.advance_clock(8 * DEFAULT_MOVE_DELAY_MS)  # allow scheduled move to complete
         assert engine.board[4][7] is rook
         assert engine.board[4][0] is None
 
@@ -138,6 +139,7 @@ class TestHandleClickMovement:
         assert rook.has_moved is False
         engine.handle_click(50, 450)
         engine.handle_click(750, 450)
+        engine.advance_clock(8 * DEFAULT_MOVE_DELAY_MS)  # allow scheduled move to complete
         assert rook.has_moved is True
 
     def test_capture_enemy_piece(self):
@@ -146,6 +148,7 @@ class TestHandleClickMovement:
         engine = make_engine(((4, 0), rook), ((4, 7), enemy))
         engine.handle_click(50, 450)   # select rook
         engine.handle_click(750, 450)  # capture enemy at (4,7)
+        engine.advance_clock(8 * DEFAULT_MOVE_DELAY_MS)  # allow scheduled move to complete
         assert engine.board[4][7] is rook
         assert engine.board[4][0] is None
 
@@ -159,7 +162,79 @@ class TestHandleClickMovement:
 
 
 # ==========================================
-# 5. PRINT_BOARD (smoke test)
+# 5. SCHEDULE_MOVE & TIMING (New Feature)
+# ==========================================
+
+class TestMoveScheduling:
+    def test_schedule_move_distance_one(self):
+        """Test that moving 1 cell schedules the move for exactly 1 delay unit."""
+        rook = Rook('w')
+        engine = make_engine(((0, 0), rook))
+        
+        # Advance clock to simulate a game already in progress
+        engine.clock_ms = 500  
+        
+        # Schedule a move 1 cell down
+        engine._schedule_move(rook, 0, 0, 1, 0)
+        
+        assert len(engine.pending_moves) == 1
+        scheduled = engine.pending_moves[0]
+        
+        assert scheduled['from_row'] == 0
+        assert scheduled['to_row'] == 1
+        
+        # Target time = current clock (500) + (1 cell * 1000ms) = 1500
+        assert scheduled['execute_at'] == 1500
+
+    def test_schedule_move_calculates_distance_correctly(self):
+        """Test that diagonal multi-cell distance uses the maximum axis difference (Chebyshev distance)."""
+        bishop = Bishop('w')
+        engine = make_engine(((2, 2), bishop))
+        
+        # Schedule a move 3 cells diagonally
+        engine._schedule_move(bishop, 2, 2, 5, 5)
+        
+        # Distance = max(|5-2|, |5-2|) = 3. Target = 3 * 1000 = 3000
+        assert engine.pending_moves[0]['execute_at'] == 3000
+
+    def test_schedule_move_distance_zero_fallback(self):
+        """Test the safety fallback if a piece is scheduled to move to its own cell."""
+        king = King('w')
+        engine = make_engine(((4, 4), king))
+        
+        # Schedule move to the exact same spot
+        engine._schedule_move(king, 4, 4, 4, 4)
+        
+        # Should fallback to distance 1 -> target = 1000 (prevents zero-time instant moves)
+        assert engine.pending_moves[0]['execute_at'] == 1000
+
+    def test_integration_two_cell_move_before_and_after_arrival(self):
+        """
+        Integration test verifying the exact VPL scenario:
+        A 2-cell move takes 2000ms. Halfway through, the piece hasn't moved.
+        After the full time, the piece appears at the destination.
+        """
+        rook = Rook('w')
+        engine = make_engine(((0, 0), rook))
+        
+        # Click (0,0) then (0,2) -> Move 2 cells right
+        engine.handle_click(50, 50)
+        engine.handle_click(250, 50)
+        
+        # Distance is 2, so it needs 2000ms.
+        # 1. Advance by 1000ms -> Move should NOT happen yet
+        engine.advance_clock(1000)
+        assert engine.board[0][0] is rook     # Still at start
+        assert engine.board[0][2] is None     # Destination is empty
+        
+        # 2. Advance by another 1000ms (Total 2000) -> Move SHOULD happen
+        engine.advance_clock(1000)
+        assert engine.board[0][0] is None     # Left start
+        assert engine.board[0][2] is rook     # Arrived at destination
+
+
+# ==========================================
+# 6. PRINT_BOARD (smoke test)
 # ==========================================
 
 class TestPrintBoard:

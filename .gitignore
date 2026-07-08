@@ -1,4 +1,11 @@
 
+# Python bytecode files
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Test coverage directories
+coverage/
+htmlcov/
+.nyc_output/
+.tox/

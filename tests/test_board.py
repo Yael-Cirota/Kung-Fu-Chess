@@ -51,6 +51,11 @@ def test_validator_row_widths_mismatch(validator):
     assert validator.validate_row_widths(invalid_rows) is False
 
 
+def test_validator_row_widths_empty_rows(validator):
+    """Should return True for an empty row list (edge case)."""
+    assert validator.validate_row_widths([]) is True
+
+
 # ==========================================
 # 2. INTEGRATION / PARSER TESTS (VPL Scenarios)
 # ==========================================
@@ -95,3 +100,15 @@ def test_parse_reject_row_width_mismatch(parser):
 def test_parse_empty_input(parser, empty_input):
     """Edge Case: Should safely handle empty strings or missing board sections."""
     assert parser.parse(empty_input) == ""
+
+
+def test_parse_ignores_blank_lines_inside_board_section(parser):
+    """Should skip blank lines while parsing board rows."""
+    vpl_input = (
+        "Board:\n"
+        "wK bK\n"
+        "\n"
+        ". .\n"
+        "Commands:"
+    )
+    assert parser.parse(vpl_input) == "wK bK\n. ."

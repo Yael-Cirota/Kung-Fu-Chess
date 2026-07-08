@@ -13,12 +13,12 @@ class Piece(ABC):
     @abstractmethod
     def get_symbol(self) -> str:
         """Returns the 2-character string representation (e.g., 'wK', 'bP')."""
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def is_legal_move(self, board: List[List[Optional['Piece']]], from_row: int, from_col: int, to_row: int, to_col: int) -> bool:
         """Validates if the target cell matches the geometric movement shape AND if the path is clear."""
-        pass
+        pass  # pragma: no cover
 
     def _is_path_clear(self, board: List[List[Optional['Piece']]], from_row: int, from_col: int, to_row: int, to_col: int) -> bool:
         """Helper to check if all squares between start and end are empty."""
@@ -46,7 +46,7 @@ class King(Piece):
     def get_symbol(self) -> str:
         return f"{self.color}K"
 
-    def is_legal_move(self, from_row: int, from_col: int, to_row: int, to_col: int) -> bool:
+    def is_legal_move(self, board: List[List[Optional['Piece']]], from_row: int, from_col: int, to_row: int, to_col: int) -> bool:
         dr = abs(to_row - from_row)
         dc = abs(to_col - from_col)
         

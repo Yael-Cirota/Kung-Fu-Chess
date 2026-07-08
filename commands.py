@@ -5,7 +5,7 @@ class Command(ABC):
     """Abstract Base Command."""
     @abstractmethod
     def execute(self, engine) -> None:
-        pass
+        pass  # pragma: no cover
 
 
 class ClickCommand(Command):

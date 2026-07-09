@@ -1,4 +1,4 @@
-from pieces import King, Rook
+from kfchess.model.piece import King, Rook
 from kfchess.model.board import Board
 from kfchess.model.position import Position
 from kfchess.engine.game_snapshot import GameSnapshot, PieceView

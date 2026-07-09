@@ -1,33 +1,9 @@
-from dataclasses import dataclass
-from enum import Enum, auto
-from typing import List, Optional, Set
+from typing import List, Set
 
 from kfchess.model.board import Board
 from kfchess.model.position import Position
 from kfchess.rules.rule_engine import RuleEngine
-
-
-class MoveOutcomeStatus(Enum):
-    EXECUTED = auto()
-    ABORTED_PREMOVE = auto()
-    ABORTED_ILLEGAL = auto()
-
-
-@dataclass(frozen=True)
-class MoveOutcome:
-    status: MoveOutcomeStatus
-    piece: object
-    from_pos: Position
-    to_pos: Position
-    captured_piece: Optional[object] = None
-
-
-@dataclass
-class _PendingMove:
-    piece: object
-    from_pos: Position
-    to_pos: Position
-    execute_at: int
+from kfchess.realtime.motion import MoveOutcome, MoveOutcomeStatus, PendingMove
 
 
 class RealTimeArbiter:
@@ -41,7 +17,7 @@ class RealTimeArbiter:
         self._board = board
         self._rule_engine = rule_engine
         self._clock_ms = 0
-        self._pending: List[_PendingMove] = []
+        self._pending: List[PendingMove] = []
         self._moving: Set = set()
 
     @property
@@ -57,7 +33,7 @@ class RealTimeArbiter:
         distance = max(dr, dc) or 1
 
         execute_at = self._clock_ms + distance * piece.move_delay_ms
-        self._pending.append(_PendingMove(piece, from_pos, to_pos, execute_at))
+        self._pending.append(PendingMove(piece, from_pos, to_pos, execute_at))
         self._moving.add(piece)
 
     def advance(self, ms: int) -> List[MoveOutcome]:
@@ -81,7 +57,7 @@ class RealTimeArbiter:
     def _release(self, piece) -> None:
         self._moving.discard(piece)
 
-    def _mature(self, move: _PendingMove) -> MoveOutcome:
+    def _mature(self, move: PendingMove) -> MoveOutcome:
         piece, from_pos, to_pos = move.piece, move.from_pos, move.to_pos
 
         if self._board.get(from_pos) is not piece:

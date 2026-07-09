@@ -1,11 +1,11 @@
-from pieces import King, Rook, Bishop, Pawn, DEFAULT_MOVE_DELAY_MS
+from kfchess.model.piece import King, Rook, Bishop, Pawn, DEFAULT_MOVE_DELAY_MS
 from kfchess.model.board import Board
 from kfchess.model.position import Position
 from kfchess.rules.move_result import MoveRejectionReason
 from kfchess.rules.rule_engine import RuleEngine
-from kfchess.engine.real_time_arbiter import RealTimeArbiter
+from kfchess.realtime.real_time_arbiter import RealTimeArbiter
 from kfchess.engine.game_engine import GameEngine
-from kfchess.ui.renderer import Renderer
+from kfchess.io.board_printer import BoardPrinter
 
 
 def empty_grid(rows=8, cols=8):
@@ -61,7 +61,7 @@ class TestSnapshot:
         board = Board([[rook, king]])
         engine = make_engine(board)
 
-        Renderer().render(engine.snapshot())
+        BoardPrinter().print(engine.snapshot())
 
         out = capsys.readouterr().out
         assert out == "wR bK\n"

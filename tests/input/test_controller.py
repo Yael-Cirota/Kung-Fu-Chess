@@ -1,9 +1,9 @@
-from pieces import King, Rook
+from kfchess.model.piece import King, Rook
 from kfchess.model.board import Board
 from kfchess.model.position import Position
 from kfchess.rules.move_result import MoveRejectionReason, MoveValidationResult
-from kfchess.ui.board_mapper import BoardMapper
-from kfchess.ui.controller import Controller
+from kfchess.input.board_mapper import BoardMapper
+from kfchess.input.controller import Controller
 
 
 def empty_grid(rows=8, cols=8):

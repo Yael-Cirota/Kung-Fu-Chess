@@ -1,9 +1,11 @@
-from pieces import King
+from kfchess.model.piece import King
 from kfchess.model.board import Board
 from kfchess.model.position import Position
+from kfchess.model.game_state import GameState
 from kfchess.rules.move_result import MoveRejectionReason, MoveValidationResult
 from kfchess.rules.rule_engine import RuleEngine
-from kfchess.engine.real_time_arbiter import RealTimeArbiter, MoveOutcomeStatus
+from kfchess.realtime.real_time_arbiter import RealTimeArbiter
+from kfchess.realtime.motion import MoveOutcomeStatus
 from kfchess.engine.game_snapshot import GameSnapshot
 
 
@@ -17,7 +19,15 @@ class GameEngine:
         self._board = board
         self._rule_engine = rule_engine
         self._arbiter = arbiter
-        self.game_over = False
+        self._state = GameState()
+
+    @property
+    def game_over(self) -> bool:
+        return self._state.game_over
+
+    @game_over.setter
+    def game_over(self, value: bool) -> None:
+        self._state.game_over = value
 
     @property
     def clock_ms(self) -> int:

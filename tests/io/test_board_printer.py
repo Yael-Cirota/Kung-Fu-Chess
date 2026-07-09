@@ -1,10 +1,10 @@
-from pieces import King, Queen, Knight, Rook, Pawn
+from kfchess.model.piece import King, Queen, Knight, Rook, Pawn
 from kfchess.model.board import Board
 from kfchess.engine.game_snapshot import GameSnapshot
-from kfchess.ui.renderer import Renderer
+from kfchess.io.board_printer import BoardPrinter
 
 
-def test_render_prints_symbols_and_dots_row_by_row(capsys):
+def test_print_prints_symbols_and_dots_row_by_row(capsys):
     grid = [
         [King('w'), None, Queen('b')],
         [None, Knight('w'), None],
@@ -13,7 +13,7 @@ def test_render_prints_symbols_and_dots_row_by_row(capsys):
     board = Board(grid)
     snapshot = GameSnapshot.of(board, clock_ms=0, game_over=False)
 
-    Renderer().render(snapshot)
+    BoardPrinter().print(snapshot)
 
     out = capsys.readouterr().out
     assert out == "wK . bQ\n. wN .\nbP . wR\n"

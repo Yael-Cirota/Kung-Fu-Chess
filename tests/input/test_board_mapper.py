@@ -1,5 +1,5 @@
 from kfchess.model.position import Position
-from kfchess.ui.board_mapper import BoardMapper
+from kfchess.input.board_mapper import BoardMapper
 
 
 class TestBoardMapper:

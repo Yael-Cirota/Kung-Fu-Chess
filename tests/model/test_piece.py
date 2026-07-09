@@ -1,5 +1,5 @@
 import pytest
-from pieces import King, Queen, Rook, Bishop, Knight, Pawn, DEFAULT_MOVE_DELAY_MS
+from kfchess.model.piece import King, Queen, Rook, Bishop, Knight, Pawn, DEFAULT_MOVE_DELAY_MS
 
 
 @pytest.mark.parametrize("piece_class,letter", [

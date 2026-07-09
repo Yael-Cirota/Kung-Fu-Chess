@@ -1,4 +1,4 @@
-from pieces import King, Rook, Bishop, Queen, Knight, Pawn
+from kfchess.model.piece import King, Rook, Bishop, Queen, Knight, Pawn
 from kfchess.model.board import Board
 from kfchess.model.position import Position
 

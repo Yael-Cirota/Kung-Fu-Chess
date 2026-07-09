@@ -1,8 +1,8 @@
-from pieces import King, Rook, Bishop, Pawn, DEFAULT_MOVE_DELAY_MS
+from kfchess.model.piece import King, Rook, Bishop, Pawn, DEFAULT_MOVE_DELAY_MS
 from kfchess.model.board import Board
 from kfchess.model.position import Position
 from kfchess.rules.rule_engine import RuleEngine
-from kfchess.engine.real_time_arbiter import RealTimeArbiter, MoveOutcomeStatus
+from kfchess.realtime.real_time_arbiter import RealTimeArbiter, MoveOutcomeStatus
 
 
 def empty_grid(rows=8, cols=8):

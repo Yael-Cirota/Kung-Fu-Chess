@@ -2,11 +2,11 @@
 # https://github.com/Yael-Cirota/Kung-Fu-Chess
 
 import sys
-from kfchess.testing.text_test_runner import TextTestRunner
+from kfchess.texttests.script_runner import ScriptRunner
 
 def run_application(vpl_input: str):
     """Core application logic orchestrator."""
-    output = TextTestRunner().run(vpl_input)
+    output = ScriptRunner().run(vpl_input)
     sys.stdout.write(output)
 
 def main():

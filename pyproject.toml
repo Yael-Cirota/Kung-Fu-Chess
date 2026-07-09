@@ -1,0 +1,8 @@
+[project]
+name = "kfchess"
+version = "0.1.0"
+description = "Kung-Fu-Chess: a real-time chess variant"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

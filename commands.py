@@ -41,17 +41,17 @@ class CommandParser:
         cmd_type = parts[0]
         
         if cmd_type == "click" and len(parts) == 3:
-            try:          
+            try:
                 return ClickCommand(int(parts[1]), int(parts[2]))
-            except ValueError as e:
-                return e
+            except ValueError:
+                return None
         elif cmd_type == "wait" and len(parts) == 2:
             try:
                 return WaitCommand(int(parts[1]))
-            except ValueError as e:
-                return e
-            
-            
+            except ValueError:
+                return None
+
+
         elif " ".join(parts) == "print board":
             return PrintBoardCommand()
             

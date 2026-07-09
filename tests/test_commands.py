@@ -82,13 +82,13 @@ class TestCommandParser:
     def test_parse_unknown_command(self):
         assert CommandParser.parse_line("move a2 a4") is None
 
-    def test_parse_click_non_integer_returns_error(self):
+    def test_parse_click_non_integer_returns_none(self):
         result = CommandParser.parse_line("click abc 250")
-        assert isinstance(result, ValueError)
+        assert result is None
 
-    def test_parse_wait_non_integer_returns_error(self):
+    def test_parse_wait_non_integer_returns_none(self):
         result = CommandParser.parse_line("wait xyz")
-        assert isinstance(result, ValueError)
+        assert result is None
 
     @pytest.mark.parametrize("line", [
         "click 100",          # missing y

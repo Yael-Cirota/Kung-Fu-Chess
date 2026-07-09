@@ -188,6 +188,26 @@ class TestIsMovingLifecycle:
         assert arbiter.is_moving(rook) is False
 
 
+class TestCancelAllPending:
+    def test_cancel_all_pending_prevents_future_pending_moves_from_executing(self):
+        rook = Rook('w')
+        bishop = Bishop('w')
+        board = board_with(((0, 0), rook), ((2, 2), bishop))
+        arbiter = make_arbiter(board)
+
+        arbiter.begin_move(rook, Position(0, 0), Position(0, 1))       # matures at 1000
+        arbiter.begin_move(bishop, Position(2, 2), Position(5, 5))     # matures at 3000
+
+        arbiter.advance(DEFAULT_MOVE_DELAY_MS)  # rook matures
+        arbiter.cancel_all_pending()
+
+        outcomes = arbiter.advance(3 * DEFAULT_MOVE_DELAY_MS)
+
+        assert outcomes == []
+        assert board.get(Position(2, 2)) is bishop
+        assert board.get(Position(5, 5)) is None
+
+
 class TestNoPremoveIncidentalBehavior:
     def test_second_schedule_from_same_origin_aborts_after_first_executes(self):
         """

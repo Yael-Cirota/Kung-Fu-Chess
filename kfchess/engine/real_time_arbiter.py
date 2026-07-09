@@ -74,6 +74,10 @@ class RealTimeArbiter:
     def abort(self, piece) -> None:
         self._release(piece)
 
+    def cancel_all_pending(self) -> None:
+        """Drops every move not yet matured (used to end all further play, e.g. on game over)."""
+        self._pending = []
+
     def _release(self, piece) -> None:
         self._moving.discard(piece)
 

@@ -36,12 +36,12 @@ class TestRuleEngineValidate:
         assert result.legal is False
         assert result.reason is MoveRejectionReason.EMPTY_ORIGIN
 
-    def test_zero_distance(self):
+    def test_same_cell_destination_is_a_legal_jump(self):
         rook = Rook('w')
         board = board_with(((4, 4), rook))
         result = RuleEngine.validate(board, Position(4, 4), Position(4, 4))
-        assert result.legal is False
-        assert result.reason is MoveRejectionReason.ZERO_DISTANCE
+        assert result.legal is True
+        assert result.reason is None
 
     def test_illegal_shape(self):
         rook = Rook('w')

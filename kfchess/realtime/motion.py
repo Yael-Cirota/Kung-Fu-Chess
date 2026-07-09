@@ -9,6 +9,7 @@ class MoveOutcomeStatus(Enum):
     EXECUTED = auto()
     ABORTED_PREMOVE = auto()
     ABORTED_ILLEGAL = auto()
+    CAPTURED_ON_ARRIVAL = auto()
 
 
 @dataclass(frozen=True)

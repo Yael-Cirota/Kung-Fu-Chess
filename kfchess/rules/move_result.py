@@ -6,7 +6,6 @@ from typing import Optional
 class MoveRejectionReason(Enum):
     OUT_OF_BOUNDS = auto()
     EMPTY_ORIGIN = auto()
-    ZERO_DISTANCE = auto()
     NOT_A_LEGAL_SHAPE = auto()
     BLOCKED = auto()
     FRIENDLY_FIRE = auto()

@@ -10,7 +10,6 @@ class TestMoveRejectionReason:
         expected = {
             "OUT_OF_BOUNDS",
             "EMPTY_ORIGIN",
-            "ZERO_DISTANCE",
             "NOT_A_LEGAL_SHAPE",
             "BLOCKED",
             "FRIENDLY_FIRE",

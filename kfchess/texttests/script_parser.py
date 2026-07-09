@@ -42,7 +42,13 @@ class PrintBoardCommand:
     pass
 
 
-ScriptCommand = Union[ClickCommand, WaitCommand, PrintBoardCommand]
+@dataclass(frozen=True)
+class JumpCommand:
+    x: int
+    y: int
+
+
+ScriptCommand = Union[ClickCommand, WaitCommand, PrintBoardCommand, JumpCommand]
 
 
 def parse_command_line(line: str) -> Optional[ScriptCommand]:
@@ -56,6 +62,11 @@ def parse_command_line(line: str) -> Optional[ScriptCommand]:
     if cmd_type == "click" and len(parts) == 3:
         try:
             return ClickCommand(int(parts[1]), int(parts[2]))
+        except ValueError:
+            return None
+    elif cmd_type == "jump" and len(parts) == 3:
+        try:
+            return JumpCommand(int(parts[1]), int(parts[2]))
         except ValueError:
             return None
     elif cmd_type == "wait" and len(parts) == 2:

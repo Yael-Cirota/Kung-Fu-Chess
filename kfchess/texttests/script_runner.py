@@ -11,7 +11,7 @@ from kfchess.input.board_mapper import BoardMapper
 from kfchess.input.controller import Controller
 from kfchess.io.board_printer import BoardPrinter
 from kfchess.texttests.script_parser import (
-    ScriptParser, ClickCommand, WaitCommand, PrintBoardCommand,
+    ScriptParser, ClickCommand, WaitCommand, PrintBoardCommand, JumpCommand,
 )
 
 
@@ -62,3 +62,6 @@ class ScriptRunner:
             game_engine.advance_clock(command.ms)
         elif isinstance(command, PrintBoardCommand):
             printer.print(game_engine.snapshot())
+        elif isinstance(command, JumpCommand):
+            controller.on_click(command.x, command.y)
+            controller.on_click(command.x, command.y)

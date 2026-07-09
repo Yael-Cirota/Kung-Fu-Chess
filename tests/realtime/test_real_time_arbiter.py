@@ -2,7 +2,7 @@ from kfchess.model.piece import King, Rook, Bishop, Pawn, Queen, DEFAULT_MOVE_DE
 from kfchess.model.board import Board
 from kfchess.model.position import Position
 from kfchess.rules.rule_engine import RuleEngine
-from kfchess.realtime.real_time_arbiter import RealTimeArbiter, MoveOutcomeStatus
+from kfchess.realtime.real_time_arbiter import RealTimeArbiter, MoveOutcomeStatus, JUMP_DURATION_MS
 
 
 def empty_grid(rows=8, cols=8):
@@ -48,18 +48,6 @@ class TestTiming:
         assert len(outcomes) == 1
         assert outcomes[0].status is MoveOutcomeStatus.EXECUTED
         assert board.get(Position(5, 5)) is bishop
-
-    def test_zero_distance_schedules_using_fallback_distance_of_one(self):
-        king = King('w')
-        board = board_with(((4, 4), king))
-        arbiter = make_arbiter(board)
-
-        arbiter.begin_move(king, Position(4, 4), Position(4, 4))
-
-        assert arbiter.advance(DEFAULT_MOVE_DELAY_MS - 1) == []
-        outcomes = arbiter.advance(1)
-
-        assert len(outcomes) == 1
 
     def test_two_phase_advance_before_and_after_arrival(self):
         rook = Rook('w')
@@ -146,6 +134,90 @@ class TestCaptureReporting:
         outcomes = arbiter.advance(DEFAULT_MOVE_DELAY_MS)
 
         assert outcomes[0].captured_piece is None
+
+
+class TestJump:
+    def test_jump_matures_after_exactly_jump_duration_and_lands_normally(self):
+        king = King('w')
+        board = board_with(((4, 4), king))
+        arbiter = make_arbiter(board)
+
+        arbiter.begin_move(king, Position(4, 4), Position(4, 4))
+
+        assert arbiter.advance(JUMP_DURATION_MS - 1) == []
+        outcomes = arbiter.advance(1)
+
+        assert len(outcomes) == 1
+        assert outcomes[0].status is MoveOutcomeStatus.EXECUTED
+        assert outcomes[0].captured_piece is None
+        assert board.get(Position(4, 4)) is king
+
+    def test_piece_remains_on_its_own_cell_throughout_the_jump(self):
+        king = King('w')
+        board = board_with(((4, 4), king))
+        arbiter = make_arbiter(board)
+
+        arbiter.begin_move(king, Position(4, 4), Position(4, 4))
+        arbiter.advance(JUMP_DURATION_MS // 2)
+
+        assert board.get(Position(4, 4)) is king
+
+    def test_is_airborne_true_during_jump_and_false_after_landing(self):
+        king = King('w')
+        board = board_with(((4, 4), king))
+        arbiter = make_arbiter(board)
+
+        arbiter.begin_move(king, Position(4, 4), Position(4, 4))
+
+        assert arbiter.is_airborne(king) is True
+        assert arbiter.is_moving(king) is True
+
+        arbiter.advance(JUMP_DURATION_MS)
+
+        assert arbiter.is_airborne(king) is False
+        assert arbiter.is_moving(king) is False
+
+    def test_enemy_arrival_during_jump_window_is_captured_by_airborne_defender(self):
+        attacker = Rook('w')
+        defender = Rook('b')
+        board = board_with(((4, 3), attacker), ((4, 4), defender))
+        arbiter = make_arbiter(board)
+
+        arbiter.begin_move(attacker, Position(4, 3), Position(4, 4))  # matures at 1000
+        arbiter.advance(500)
+        arbiter.begin_move(defender, Position(4, 4), Position(4, 4))  # matures at 1500
+
+        outcomes = arbiter.advance(500)  # clock now 1000: attacker arrives, defender still airborne
+
+        assert outcomes[0].status is MoveOutcomeStatus.CAPTURED_ON_ARRIVAL
+        assert outcomes[0].piece is attacker
+        assert board.get(Position(4, 3)) is None
+        assert board.get(Position(4, 4)) is defender
+        assert arbiter.is_moving(attacker) is False
+
+        landing = arbiter.advance(500)  # clock now 1500: defender's jump lands, untouched
+
+        assert landing[0].status is MoveOutcomeStatus.EXECUTED
+        assert landing[0].captured_piece is None
+        assert board.get(Position(4, 4)) is defender
+        assert arbiter.is_airborne(defender) is False
+
+    def test_enemy_arrival_after_jump_has_already_landed_captures_normally(self):
+        attacker = Rook('w')
+        defender = Rook('b')
+        board = board_with(((4, 3), attacker), ((4, 4), defender))
+        arbiter = make_arbiter(board)
+
+        arbiter.begin_move(defender, Position(4, 4), Position(4, 4))
+        arbiter.advance(JUMP_DURATION_MS)  # jump lands before the attacker arrives
+        assert arbiter.is_airborne(defender) is False
+
+        arbiter.begin_move(attacker, Position(4, 3), Position(4, 4))
+        outcomes = arbiter.advance(DEFAULT_MOVE_DELAY_MS)
+
+        assert outcomes[0].status is MoveOutcomeStatus.EXECUTED
+        assert outcomes[0].captured_piece is defender
+        assert board.get(Position(4, 4)) is attacker
 
 
 class TestIsMovingLifecycle:

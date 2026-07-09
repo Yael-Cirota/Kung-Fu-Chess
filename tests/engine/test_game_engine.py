@@ -191,3 +191,45 @@ class TestGameOver:
         assert result.legal is False
         assert result.reason is MoveRejectionReason.GAME_OVER
         assert engine.is_moving(bystander) is False
+
+
+class TestJump:
+    def test_jump_request_is_legal_and_lands_after_jump_duration(self):
+        rook = Rook('w')
+        board = board_with(((4, 4), rook))
+        engine = make_engine(board)
+
+        result = engine.request_move(Position(4, 4), Position(4, 4))
+        assert result.legal is True
+        assert engine.is_moving(rook) is True
+
+        engine.advance_clock(DEFAULT_MOVE_DELAY_MS)
+        assert engine.is_moving(rook) is False
+        assert board.get(Position(4, 4)) is rook
+
+    def test_jumping_while_already_moving_is_rejected(self):
+        rook = Rook('w')
+        board = board_with(((4, 4), rook))
+        engine = make_engine(board)
+
+        engine.request_move(Position(4, 4), Position(4, 7))
+        result = engine.request_move(Position(4, 4), Position(4, 4))
+
+        assert result.legal is False
+        assert result.reason is MoveRejectionReason.PIECE_ALREADY_MOVING
+
+    def test_king_destroyed_by_airborne_defender_sets_game_over(self):
+        attacker = King('w')
+        defender = Rook('b')
+        board = board_with(((4, 3), attacker), ((4, 4), defender))
+        engine = make_engine(board)
+
+        engine.request_move(Position(4, 3), Position(4, 4))  # king begins walking in, matures at 1000
+        engine.advance_clock(500)
+        engine.request_move(Position(4, 4), Position(4, 4))  # defender jumps, matures at 1500
+
+        engine.advance_clock(500)  # clock now 1000: king arrives while defender still airborne
+
+        assert engine.game_over is True
+        assert board.get(Position(4, 3)) is None
+        assert board.get(Position(4, 4)) is defender

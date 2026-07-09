@@ -54,16 +54,24 @@ class GameEngine:
             return result
 
         piece = self._board.get(from_pos)
+        if from_pos == to_pos and self._arbiter.is_moving(piece):
+            return MoveValidationResult.reject(MoveRejectionReason.PIECE_ALREADY_MOVING)
+
         self._arbiter.begin_move(piece, from_pos, to_pos)
         return MoveValidationResult.ok()
 
     def advance_clock(self, ms: int) -> None:
         outcomes = self._arbiter.advance(ms)
 
-        king_captured = any(
-            outcome.status is MoveOutcomeStatus.EXECUTED and isinstance(outcome.captured_piece, King)
-            for outcome in outcomes
-        )
+        king_captured = any(self._is_king_captured(outcome) for outcome in outcomes)
         if king_captured:
             self.game_over = True
             self._arbiter.cancel_all_pending()
+
+    @staticmethod
+    def _is_king_captured(outcome) -> bool:
+        if outcome.status is MoveOutcomeStatus.EXECUTED:
+            return isinstance(outcome.captured_piece, King)
+        if outcome.status is MoveOutcomeStatus.CAPTURED_ON_ARRIVAL:
+            return isinstance(outcome.piece, King)
+        return False

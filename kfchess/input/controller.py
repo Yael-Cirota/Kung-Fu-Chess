@@ -35,7 +35,10 @@ class Controller:
             self.selected = None
             return
 
-        if target_piece is not None and target_piece.color == selected_piece.color:
+        if pos == self.selected:
+            self._game_engine.request_move(self.selected, pos)
+            self.selected = None
+        elif target_piece is not None and target_piece.color == selected_piece.color:
             if self._game_engine.is_moving(target_piece):
                 return
             self.selected = pos

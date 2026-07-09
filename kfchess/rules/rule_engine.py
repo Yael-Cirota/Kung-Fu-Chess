@@ -20,7 +20,7 @@ class RuleEngine:
             return MoveValidationResult.reject(MoveRejectionReason.EMPTY_ORIGIN)
 
         if from_pos == to_pos:
-            return MoveValidationResult.reject(MoveRejectionReason.ZERO_DISTANCE)
+            return MoveValidationResult.ok()
 
         if not MovementRules.geometry_matches(board, piece, from_pos, to_pos):
             return MoveValidationResult.reject(MoveRejectionReason.NOT_A_LEGAL_SHAPE)

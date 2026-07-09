@@ -109,6 +109,19 @@ class TestControllerSelection:
         assert engine.request_move_calls == []
 
 
+class TestControllerJump:
+    def test_clicking_the_selected_piece_again_requests_a_jump(self):
+        rook = Rook('w')
+        engine = FakeGameEngine(board_with(((4, 0), rook)))
+        controller = make_controller(engine)
+
+        controller.on_click(50, 450)  # select rook at (4,0)
+        controller.on_click(50, 450)  # click the same cell again
+
+        assert engine.request_move_calls == [(Position(4, 0), Position(4, 0))]
+        assert controller.selected is None
+
+
 class TestControllerMoveAttempts:
     def test_legal_move_calls_request_move_and_clears_selection(self):
         rook = Rook('w')

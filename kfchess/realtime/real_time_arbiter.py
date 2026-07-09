@@ -6,6 +6,8 @@ from kfchess.model.position import Position
 from kfchess.rules.rule_engine import RuleEngine
 from kfchess.realtime.motion import MoveOutcome, MoveOutcomeStatus, PendingMove
 
+JUMP_DURATION_MS = 1000
+
 
 class RealTimeArbiter:
     """
@@ -20,6 +22,7 @@ class RealTimeArbiter:
         self._clock_ms = 0
         self._pending: List[PendingMove] = []
         self._moving: Set = set()
+        self._airborne: Set = set()
 
     @property
     def clock_ms(self) -> int:
@@ -28,12 +31,19 @@ class RealTimeArbiter:
     def is_moving(self, piece) -> bool:
         return piece in self._moving
 
-    def begin_move(self, piece, from_pos: Position, to_pos: Position) -> None:
-        dr = abs(to_pos.row - from_pos.row)
-        dc = abs(to_pos.col - from_pos.col)
-        distance = max(dr, dc) or 1
+    def is_airborne(self, piece) -> bool:
+        return piece in self._airborne
 
-        execute_at = self._clock_ms + distance * piece.move_delay_ms
+    def begin_move(self, piece, from_pos: Position, to_pos: Position) -> None:
+        if from_pos == to_pos:
+            execute_at = self._clock_ms + JUMP_DURATION_MS
+            self._airborne.add(piece)
+        else:
+            dr = abs(to_pos.row - from_pos.row)
+            dc = abs(to_pos.col - from_pos.col)
+            distance = max(dr, dc)
+            execute_at = self._clock_ms + distance * piece.move_delay_ms
+
         self._pending.append(PendingMove(piece, from_pos, to_pos, execute_at))
         self._moving.add(piece)
 
@@ -46,7 +56,8 @@ class RealTimeArbiter:
         )
         self._pending = [m for m in self._pending if m.execute_at > self._clock_ms]
 
-        return [self._mature(move) for move in ready]
+        still_airborne = frozenset(self._airborne)
+        return [self._mature(move, still_airborne) for move in ready]
 
     def abort(self, piece) -> None:
         self._release(piece)
@@ -57,20 +68,31 @@ class RealTimeArbiter:
 
     def _release(self, piece) -> None:
         self._moving.discard(piece)
+        self._airborne.discard(piece)
 
-    def _mature(self, move: PendingMove) -> MoveOutcome:
+    def _mature(self, move: PendingMove, still_airborne: frozenset) -> MoveOutcome:
         piece, from_pos, to_pos = move.piece, move.from_pos, move.to_pos
 
         if self._board.get(from_pos) is not piece:
             self._release(piece)
             return MoveOutcome(MoveOutcomeStatus.ABORTED_PREMOVE, piece, from_pos, to_pos)
 
+        if from_pos == to_pos:
+            self._release(piece)
+            return MoveOutcome(MoveOutcomeStatus.EXECUTED, piece, from_pos, to_pos)
+
         result = self._rule_engine.validate(self._board, from_pos, to_pos)
         if not result.legal:
             self._release(piece)
             return MoveOutcome(MoveOutcomeStatus.ABORTED_ILLEGAL, piece, from_pos, to_pos)
 
-        captured = self._board.get(to_pos)
+        defender = self._board.get(to_pos)
+        if defender is not None and defender in still_airborne:
+            self._board.remove(from_pos)
+            self._release(piece)
+            return MoveOutcome(MoveOutcomeStatus.CAPTURED_ON_ARRIVAL, piece, from_pos, to_pos)
+
+        captured = defender
         self._board.set(to_pos, piece)
         self._board.remove(from_pos)
         piece.has_moved = True

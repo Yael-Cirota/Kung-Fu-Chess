@@ -1,6 +1,7 @@
 from typing import List, Set
 
 from kfchess.model.board import Board
+from kfchess.model.piece import Pawn, Queen
 from kfchess.model.position import Position
 from kfchess.rules.rule_engine import RuleEngine
 from kfchess.realtime.motion import MoveOutcome, MoveOutcomeStatus, PendingMove
@@ -73,6 +74,13 @@ class RealTimeArbiter:
         self._board.set(to_pos, piece)
         self._board.remove(from_pos)
         piece.has_moved = True
+
+        last_row = 0 if piece.color == 'w' else self._board.rows - 1
+        if isinstance(piece, Pawn) and to_pos.row == last_row:
+            promoted = Queen(piece.color)
+            promoted.has_moved = True
+            self._board.set(to_pos, promoted)
+
         self._release(piece)
 
         return MoveOutcome(

@@ -268,11 +268,33 @@ class TestMovementRulesPawn:
             board, pawn, Position(4, 3), Position(5, 3)
         ) is False
 
-    def test_no_double_move(self):
+    def test_white_pawn_double_move_from_start_row(self):
         pawn = Pawn('w')
-        board = board_with(((6, 3), pawn))
+        board = board_with(((7, 3), pawn))
         assert MovementRules.is_legal_shape(
-            board, pawn, Position(6, 3), Position(4, 3)
+            board, pawn, Position(7, 3), Position(5, 3)
+        ) is True
+
+    def test_black_pawn_double_move_from_start_row(self):
+        pawn = Pawn('b')
+        board = board_with(((0, 3), pawn))
+        assert MovementRules.is_legal_shape(
+            board, pawn, Position(0, 3), Position(2, 3)
+        ) is True
+
+    def test_no_double_move_from_non_start_row_even_if_unmoved(self):
+        pawn = Pawn('w')
+        board = board_with(((5, 3), pawn))
+        assert MovementRules.is_legal_shape(
+            board, pawn, Position(5, 3), Position(3, 3)
+        ) is False
+
+    def test_no_double_move_when_path_blocked(self):
+        pawn = Pawn('w')
+        blocker = Pawn('b')
+        board = board_with(((7, 3), pawn), ((6, 3), blocker))
+        assert MovementRules.is_legal_shape(
+            board, pawn, Position(7, 3), Position(5, 3)
         ) is False
 
     def test_no_move(self):

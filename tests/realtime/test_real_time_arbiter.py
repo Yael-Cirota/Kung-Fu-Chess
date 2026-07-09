@@ -1,4 +1,4 @@
-from kfchess.model.piece import King, Rook, Bishop, Pawn, DEFAULT_MOVE_DELAY_MS
+from kfchess.model.piece import King, Rook, Bishop, Pawn, Queen, DEFAULT_MOVE_DELAY_MS
 from kfchess.model.board import Board
 from kfchess.model.position import Position
 from kfchess.rules.rule_engine import RuleEngine
@@ -233,3 +233,42 @@ class TestNoPremoveIncidentalBehavior:
         assert second_outcomes[0].status is MoveOutcomeStatus.ABORTED_PREMOVE
         assert board.get(Position(0, 5)) is None
         assert board.get(Position(0, 1)) is rook
+
+
+class TestPawnPromotion:
+    def test_white_pawn_reaching_row_zero_promotes_to_queen(self):
+        pawn = Pawn('w')
+        board = board_with(((1, 3), pawn))
+        arbiter = make_arbiter(board)
+
+        arbiter.begin_move(pawn, Position(1, 3), Position(0, 3))
+        outcomes = arbiter.advance(DEFAULT_MOVE_DELAY_MS)
+
+        assert outcomes[0].status is MoveOutcomeStatus.EXECUTED
+        promoted = board.get(Position(0, 3))
+        assert isinstance(promoted, Queen)
+        assert promoted.color == 'w'
+        assert arbiter.is_moving(pawn) is False
+
+    def test_black_pawn_reaching_last_row_promotes_to_queen(self):
+        pawn = Pawn('b')
+        board = board_with(((6, 3), pawn))
+        arbiter = make_arbiter(board)
+
+        arbiter.begin_move(pawn, Position(6, 3), Position(7, 3))
+        outcomes = arbiter.advance(DEFAULT_MOVE_DELAY_MS)
+
+        assert outcomes[0].status is MoveOutcomeStatus.EXECUTED
+        promoted = board.get(Position(7, 3))
+        assert isinstance(promoted, Queen)
+        assert promoted.color == 'b'
+
+    def test_pawn_not_reaching_last_row_does_not_promote(self):
+        pawn = Pawn('w')
+        board = board_with(((4, 3), pawn))
+        arbiter = make_arbiter(board)
+
+        arbiter.begin_move(pawn, Position(4, 3), Position(3, 3))
+        arbiter.advance(DEFAULT_MOVE_DELAY_MS)
+
+        assert board.get(Position(3, 3)) is pawn

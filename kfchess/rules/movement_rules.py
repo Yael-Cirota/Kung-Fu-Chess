@@ -86,6 +86,11 @@ class MovementRules:
         if dc == 0 and dr == direction:
             return board.get(to_pos) is None
 
+        start_row = board.rows - 1 if piece.color == 'w' else 0
+        if dc == 0 and dr == 2 * direction and from_pos.row == start_row:
+            mid_pos = Position(from_pos.row + direction, from_pos.col)
+            return board.get(mid_pos) is None and board.get(to_pos) is None
+
         if abs(dc) == 1 and dr == direction:
             target = board.get(to_pos)
             return target is not None and target.color != piece.color

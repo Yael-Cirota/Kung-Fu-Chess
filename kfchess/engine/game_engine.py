@@ -25,6 +25,12 @@ class GameEngine:
     def is_moving(self, piece) -> bool:
         return self._arbiter.is_moving(piece)
 
+    def piece_at(self, pos: Position):
+        return self._board.get(pos)
+
+    def is_within_bounds(self, pos: Position) -> bool:
+        return self._board.is_within_bounds(pos)
+
     def request_move(self, from_pos: Position, to_pos: Position) -> MoveValidationResult:
         if self.game_over:
             return MoveValidationResult.reject(MoveRejectionReason.GAME_OVER)

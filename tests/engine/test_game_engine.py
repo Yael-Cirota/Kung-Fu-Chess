@@ -24,6 +24,23 @@ def make_engine(board):
     return GameEngine(board, rule_engine, arbiter)
 
 
+class TestBoardPassthroughs:
+    def test_piece_at_returns_occupant(self):
+        rook = Rook('w')
+        board = board_with(((4, 0), rook))
+        engine = make_engine(board)
+
+        assert engine.piece_at(Position(4, 0)) is rook
+        assert engine.piece_at(Position(0, 0)) is None
+
+    def test_is_within_bounds_matches_board(self):
+        board = board_with()
+        engine = make_engine(board)
+
+        assert engine.is_within_bounds(Position(0, 0)) is True
+        assert engine.is_within_bounds(Position(8, 0)) is False
+
+
 class TestRequestMoveLegal:
     def test_legal_move_returns_ok_and_schedules(self):
         rook = Rook('w')

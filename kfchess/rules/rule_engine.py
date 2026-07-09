@@ -22,8 +22,11 @@ class RuleEngine:
         if from_pos == to_pos:
             return MoveValidationResult.reject(MoveRejectionReason.ZERO_DISTANCE)
 
-        if not MovementRules.is_legal_shape(board, piece, from_pos, to_pos):
+        if not MovementRules.geometry_matches(board, piece, from_pos, to_pos):
             return MoveValidationResult.reject(MoveRejectionReason.NOT_A_LEGAL_SHAPE)
+
+        if MovementRules.requires_clear_path(piece) and not MovementRules.is_path_clear(board, from_pos, to_pos):
+            return MoveValidationResult.reject(MoveRejectionReason.BLOCKED)
 
         target = board.get(to_pos)
         if target is not None and target.color == piece.color:

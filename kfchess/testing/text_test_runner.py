@@ -3,8 +3,8 @@ import io
 from pathlib import Path
 from typing import List, Optional, Union
 
-from board_parser import BoardValidator, BoardParser
-from commands import CommandParser
+from kfchess.parsing.board_parser import BoardValidator, BoardParser
+from kfchess.parsing.commands import CommandParser
 from pieces import King, Queen, Rook, Bishop, Knight, Pawn
 
 from kfchess.model.board import Board

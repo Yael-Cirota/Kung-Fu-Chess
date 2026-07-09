@@ -1,5 +1,5 @@
 import pytest
-from commands import (
+from kfchess.parsing.commands import (
     ClickCommand, WaitCommand, PrintBoardCommand, CommandParser
 )
 

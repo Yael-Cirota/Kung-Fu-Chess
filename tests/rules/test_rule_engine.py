@@ -50,14 +50,21 @@ class TestRuleEngineValidate:
         assert result.legal is False
         assert result.reason is MoveRejectionReason.NOT_A_LEGAL_SHAPE
 
-    def test_blocked_path_reported_as_not_a_legal_shape(self):
-        # Known Phase 5 limitation: MovementRules doesn't yet distinguish
-        # "wrong shape" from "blocked path" - both collapse into
-        # NOT_A_LEGAL_SHAPE until Phase 11 decomposes piece geometry.
+    def test_blocked_path_reported_as_blocked(self):
         rook = Rook('w')
         blocker = Pawn('b')
         board = board_with(((4, 0), rook), ((4, 3), blocker))
         result = RuleEngine.validate(board, Position(4, 0), Position(4, 7))
+        assert result.legal is False
+        assert result.reason is MoveRejectionReason.BLOCKED
+
+    def test_blocked_path_for_non_sliding_piece_is_still_not_a_legal_shape(self):
+        # Knights jump, so an intervening piece never blocks them - a
+        # rejected knight move is always NOT_A_LEGAL_SHAPE, never BLOCKED.
+        from pieces import Knight
+        knight = Knight('w')
+        board = board_with(((4, 4), knight))
+        result = RuleEngine.validate(board, Position(4, 4), Position(4, 6))
         assert result.legal is False
         assert result.reason is MoveRejectionReason.NOT_A_LEGAL_SHAPE
 

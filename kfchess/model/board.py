@@ -39,9 +39,5 @@ class Board:
         return previous
 
     def as_grid(self) -> List[List[Optional[object]]]:
-        """
-        Temporary bridge back to the legacy raw-list shape, for code that
-        hasn't migrated off it yet. Removed once nothing needs raw-list
-        access (see Phase 11 of the migration plan).
-        """
+        """Row-by-row read access, e.g. for building a GameSnapshot."""
         return self._grid

@@ -1,5 +1,5 @@
 import pytest
-from board_parser import BoardValidator, BoardParser
+from kfchess.parsing.board_parser import BoardValidator, BoardParser
 
 @pytest.fixture
 def validator():

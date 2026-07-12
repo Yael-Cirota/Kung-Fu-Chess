@@ -67,7 +67,7 @@ class TestControllerSelection:
 
         assert controller.selected is None
 
-    def test_click_friendly_piece_on_second_click_still_requests_move(self):
+    def test_click_friendly_piece_replaces_selection(self):
         king = Piece('w', PieceKind.KING)
         rook = Piece('w', PieceKind.ROOK)
         engine = FakeGameEngine(board_with(((0, 0), king), ((0, 1), rook)))
@@ -76,8 +76,8 @@ class TestControllerSelection:
         controller.on_click(50, 50)   # select king at (0,0)
         controller.on_click(150, 50)  # click rook at (0,1)
 
-        assert engine.request_move_calls == [(Position(0, 0), Position(0, 1))]
-        assert controller.selected is None
+        assert engine.request_move_calls == []
+        assert controller.selected == Position(0, 1)
 
     def test_off_board_click_with_selection_cancels_it_without_a_command(self):
         rook = Piece('w', PieceKind.ROOK)

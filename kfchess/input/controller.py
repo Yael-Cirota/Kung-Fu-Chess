@@ -25,9 +25,17 @@ class Controller:
             self.selected = None
             return
         
+        target = self._game_engine.piece_at(pos)
+
         if self.selected is None:
-            if self._game_engine.piece_at(pos) is not None:
+            if target is not None:
                 self.selected = pos
+            return
+
+        selected_piece = self._game_engine.piece_at(self.selected)
+        if pos != self.selected and target is not None and selected_piece is not None \
+                and target.color == selected_piece.color:
+            self.selected = pos
             return
 
         self._game_engine.request_move(self.selected, pos)

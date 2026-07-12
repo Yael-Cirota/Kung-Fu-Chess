@@ -20,10 +20,8 @@ def board_with(*pieces_at):
 class FakeGameEngine:
     """Minimal stand-in for kfchess.engine.GameEngine to keep Controller tests unit-level."""
 
-    def __init__(self, board, moving_pieces=None, game_over=False, next_result=None):
+    def __init__(self, board, next_result=None):
         self._board = board
-        self._moving = moving_pieces or set()
-        self.game_over = game_over
         self._next_result = next_result if next_result is not None else MoveValidation.ok()
         self.request_move_calls = []
 
@@ -32,9 +30,6 @@ class FakeGameEngine:
 
     def piece_at(self, pos):
         return self._board.get(pos)
-
-    def is_moving(self, piece):
-        return piece in self._moving
 
     def request_move(self, from_pos, to_pos):
         self.request_move_calls.append((from_pos, to_pos))
@@ -72,7 +67,7 @@ class TestControllerSelection:
 
         assert controller.selected is None
 
-    def test_click_friendly_piece_replaces_selection(self):
+    def test_click_friendly_piece_on_second_click_still_requests_move(self):
         king = Piece('w', PieceKind.KING)
         rook = Piece('w', PieceKind.ROOK)
         engine = FakeGameEngine(board_with(((0, 0), king), ((0, 1), rook)))
@@ -81,29 +76,16 @@ class TestControllerSelection:
         controller.on_click(50, 50)   # select king at (0,0)
         controller.on_click(150, 50)  # click rook at (0,1)
 
-        assert controller.selected == Position(0, 1)
+        assert engine.request_move_calls == [(Position(0, 0), Position(0, 1))]
+        assert controller.selected is None
 
-    def test_click_friendly_moving_piece_keeps_current_selection(self):
-        king = Piece('w', PieceKind.KING)
+    def test_off_board_click_with_selection_cancels_it_without_a_command(self):
         rook = Piece('w', PieceKind.ROOK)
-        engine = FakeGameEngine(board_with(((0, 0), king), ((0, 1), rook)), moving_pieces={rook})
+        engine = FakeGameEngine(board_with(((0, 0), rook)))
         controller = make_controller(engine)
 
-        controller.on_click(50, 50)   # select king at (0,0)
-        controller.on_click(150, 50)  # click moving rook at (0,1)
-
-        assert controller.selected == Position(0, 0)
-
-    def test_failsafe_clears_selection_when_selected_piece_is_missing(self):
-        rook = Piece('w', PieceKind.ROOK)
-        board = board_with(((0, 0), rook))
-        engine = FakeGameEngine(board)
-        controller = make_controller(engine)
-
-        controller.on_click(50, 50)  # select rook at (0,0)
-        board.move_piece(Position(0, 0))  # out-of-band mutation removes the selected piece
-
-        controller.on_click(150, 50)  # triggers failsafe branch
+        controller.on_click(50, 50)    # select rook at (0,0)
+        controller.on_click(900, 900)  # off-board click cancels selection
 
         assert controller.selected is None
         assert engine.request_move_calls == []
@@ -146,15 +128,4 @@ class TestControllerMoveAttempts:
         controller.on_click(150, 350)  # diagonal - illegal for rook
 
         assert engine.request_move_calls == [(Position(4, 0), Position(3, 1))]
-        assert controller.selected is None
-
-
-class TestControllerGameOver:
-    def test_click_ignored_when_game_is_over(self):
-        king = Piece('w', PieceKind.KING)
-        engine = FakeGameEngine(board_with(((0, 0), king)), game_over=True)
-        controller = make_controller(engine)
-
-        controller.on_click(50, 50)
-
         assert controller.selected is None

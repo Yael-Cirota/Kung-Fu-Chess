@@ -50,7 +50,7 @@ class Board:
         return previous
 
     def as_grid(self) -> List[List[Optional[object]]]:
-        """Row-by-row read access, e.g. for building a GameSnapshot."""
+        """Row-by-row read access, e.g. for printing the board."""
         return self._grid
 
     @staticmethod

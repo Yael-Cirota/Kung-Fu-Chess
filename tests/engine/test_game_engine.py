@@ -5,7 +5,6 @@ from kfchess.rules.move_validation import MoveRejectionReason
 from kfchess.rules.rule_engine import RuleEngine
 from kfchess.realtime.real_time_arbiter import RealTimeArbiter, MOVE_DURATION_MS_PER_CELL as DEFAULT_MOVE_DELAY_MS
 from kfchess.engine.game_engine import GameEngine
-from kfchess.io.board_printer import BoardPrinter
 
 
 def empty_grid(rows=8, cols=8):
@@ -41,30 +40,6 @@ class TestBoardPassthroughs:
         assert engine.is_within_bounds(Position(0, 0)) is True
         assert engine.is_within_bounds(Position(8, 0)) is False
 
-
-class TestSnapshot:
-    def test_snapshot_reflects_board_and_clock_and_game_over(self):
-        rook = Piece('w', PieceKind.ROOK)
-        board = board_with(((0, 0), rook))
-        engine = make_engine(board)
-        engine.wait(250)
-
-        snapshot = engine.snapshot()
-
-        assert snapshot.piece_at(Position(0, 0)).symbol == "wR"
-        assert snapshot.clock_ms == 250
-        assert snapshot.game_over is False
-
-    def test_snapshot_renders_like_print_board(self, capsys):
-        rook = Piece('w', PieceKind.ROOK)
-        king = Piece('b', PieceKind.KING)
-        board = Board([[rook, king]])
-        engine = make_engine(board)
-
-        BoardPrinter().print(engine.snapshot())
-
-        out = capsys.readouterr().out
-        assert out == "wR bK\n"
 
 
 class TestRequestMoveLegal:

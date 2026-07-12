@@ -6,7 +6,6 @@ from kfchess.rules.move_validation import MoveRejectionReason
 from kfchess.rules.rule_engine import RuleEngine
 from kfchess.realtime.real_time_arbiter import RealTimeArbiter
 from kfchess.realtime.motion import MoveOutcomeStatus
-from kfchess.engine.game_snapshot import GameSnapshot
 from kfchess.engine.move_result import MoveResult
 
 
@@ -47,9 +46,6 @@ class GameEngine:
 
     def is_within_bounds(self, pos: Position) -> bool:
         return self._board.is_within_bounds(pos)
-
-    def snapshot(self) -> GameSnapshot:
-        return GameSnapshot.of(self._board, clock_ms=self.clock_ms, game_over=self.game_over)
 
     def request_move(self, from_pos: Position, to_pos: Position) -> MoveResult:
         if self.game_over:

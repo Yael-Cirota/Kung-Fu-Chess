@@ -1,10 +1,10 @@
-from kfchess.engine.game_snapshot import GameSnapshot
+from kfchess.model.board import Board
 
 
 class BoardPrinter:
-    """Prints a read-only GameSnapshot. No mutable objects are exposed."""
+    """Prints a Board's current piece layout, one row per line."""
 
-    def print(self, snapshot: GameSnapshot) -> None:
-        for row in snapshot.cells:
-            row_str = " ".join(view.symbol if view is not None else '.' for view in row)
+    def print(self, board: Board) -> None:
+        for row in board.as_grid():
+            row_str = " ".join(piece.get_symbol() if piece is not None else '.' for piece in row)
             print(row_str)

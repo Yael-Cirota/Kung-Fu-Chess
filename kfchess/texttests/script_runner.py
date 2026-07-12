@@ -52,16 +52,18 @@ class ScriptRunner:
         printer = BoardPrinter()
 
         for command in script.commands:
-            self._execute(command, controller, game_engine, printer)
+            self._execute(command, controller, game_engine, board, printer)
 
     @staticmethod
-    def _execute(command, controller: Controller, game_engine: GameEngine, printer: BoardPrinter) -> None:
+    def _execute(
+        command, controller: Controller, game_engine: GameEngine, board: Board, printer: BoardPrinter
+    ) -> None:
         if isinstance(command, ClickCommand):
             controller.on_click(command.x, command.y)
         elif isinstance(command, WaitCommand):
             game_engine.wait(command.ms)
         elif isinstance(command, PrintBoardCommand):
-            printer.print(game_engine.snapshot())
+            printer.print(board)
         elif isinstance(command, JumpCommand):
             controller.on_click(command.x, command.y)
             controller.on_click(command.x, command.y)

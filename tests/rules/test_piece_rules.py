@@ -277,16 +277,25 @@ class TestPawnRule:
 
     def test_double_step_allowed_from_start_row(self):
         pawn = Piece('w', PieceKind.PAWN)
-        board = board_with(((7, 3), pawn))
+        board = board_with(((6, 3), pawn))
 
         destinations = PawnRule.legal_destinations(board, pawn)
 
+        assert Position(4, 3) in destinations
         assert Position(5, 3) in destinations
-        assert Position(6, 3) in destinations
 
     def test_no_double_step_once_pawn_has_moved(self):
         pawn = Piece('w', PieceKind.PAWN)
         pawn.has_moved = True
+        board = board_with(((6, 3), pawn))
+
+        destinations = PawnRule.legal_destinations(board, pawn)
+
+        assert Position(4, 3) not in destinations
+        assert Position(5, 3) in destinations
+
+    def test_no_double_step_when_not_on_start_row(self):
+        pawn = Piece('w', PieceKind.PAWN)
         board = board_with(((4, 3), pawn))
 
         destinations = PawnRule.legal_destinations(board, pawn)
@@ -297,22 +306,22 @@ class TestPawnRule:
     def test_double_step_blocked_by_piece_two_squares_ahead(self):
         pawn = Piece('w', PieceKind.PAWN)
         blocker = Piece('b', PieceKind.PAWN)
-        board = board_with(((7, 3), pawn), ((5, 3), blocker))
+        board = board_with(((6, 3), pawn), ((4, 3), blocker))
 
         destinations = PawnRule.legal_destinations(board, pawn)
 
-        assert Position(5, 3) not in destinations
-        assert Position(6, 3) in destinations
+        assert Position(4, 3) not in destinations
+        assert Position(5, 3) in destinations
 
     def test_double_step_blocked_by_piece_one_square_ahead(self):
         pawn = Piece('w', PieceKind.PAWN)
         blocker = Piece('b', PieceKind.PAWN)
-        board = board_with(((7, 3), pawn), ((6, 3), blocker))
+        board = board_with(((6, 3), pawn), ((5, 3), blocker))
 
         destinations = PawnRule.legal_destinations(board, pawn)
 
+        assert Position(4, 3) not in destinations
         assert Position(5, 3) not in destinations
-        assert Position(6, 3) not in destinations
 
     def test_cannot_move_backward(self):
         pawn = Piece('w', PieceKind.PAWN)

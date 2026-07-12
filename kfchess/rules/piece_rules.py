@@ -134,7 +134,8 @@ class PawnRule(PieceRule):
         if forward_clear:
             destinations.add(forward)
 
-        if not piece.has_moved and forward_clear:
+        home_row = board.rows - 2 if piece.color == 'w' else 1
+        if origin.row == home_row and not piece.has_moved and forward_clear:
             double_forward = Position(origin.row + 2 * direction, origin.col)
             if board.is_within_bounds(double_forward) and board.get(double_forward) is None:
                 destinations.add(double_forward)

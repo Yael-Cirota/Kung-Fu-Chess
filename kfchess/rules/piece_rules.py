@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Iterable, Optional, Set, Tuple
 
 from kfchess.model.board import Board
+from kfchess.model.piece import PieceKind
 from kfchess.model.position import Position
 
 ROOK_DIRECTIONS = [(-1, 0), (1, 0), (0, -1), (0, 1)]
@@ -64,6 +65,11 @@ class PieceRule(ABC):
     def legal_destinations(board: Board, piece) -> Set[Position]:
         raise NotImplementedError  # pragma: no cover
 
+    @staticmethod
+    def promotion_kind(board: Board, piece, to_pos: Position) -> Optional[PieceKind]:
+        """Returns the kind `piece` should become after landing on to_pos, or None. Most pieces never promote."""
+        return None
+
 
 class RookRule(PieceRule):
     """Slides horizontally and vertically until blocked."""
@@ -112,9 +118,9 @@ class KingRule(PieceRule):
 
 class PawnRule(PieceRule):
     """
-    Simplified pawn: one square forward (must be empty), or one square
-    diagonally forward to capture an enemy piece. No double-step, no
-    en passant, no promotion.
+    Simplified pawn: one square forward (must be empty), two squares
+    forward from its start row (path must be clear), or one square
+    diagonally forward to capture an enemy piece. No en passant.
     """
 
     @staticmethod
@@ -124,8 +130,14 @@ class PawnRule(PieceRule):
         destinations: Set[Position] = set()
 
         forward = Position(origin.row + direction, origin.col)
-        if board.is_within_bounds(forward) and board.get(forward) is None:
+        forward_clear = board.is_within_bounds(forward) and board.get(forward) is None
+        if forward_clear:
             destinations.add(forward)
+
+        if not piece.has_moved and forward_clear:
+            double_forward = Position(origin.row + 2 * direction, origin.col)
+            if board.is_within_bounds(double_forward) and board.get(double_forward) is None:
+                destinations.add(double_forward)
 
         for dc in (-1, 1):
             capture = Position(origin.row + direction, origin.col + dc)
@@ -133,3 +145,8 @@ class PawnRule(PieceRule):
                 destinations.add(capture)
 
         return destinations
+
+    @staticmethod
+    def promotion_kind(board: Board, piece, to_pos: Position) -> Optional[PieceKind]:
+        last_row = 0 if piece.color == 'w' else board.rows - 1
+        return PieceKind.QUEEN if to_pos.row == last_row else None

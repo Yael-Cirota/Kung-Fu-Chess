@@ -83,3 +83,28 @@ class TestRuleEngineValidate:
         result = self.engine.validate(board, Position(0, 0), Position(0, 7))
         assert result.is_valid is True
         assert result.reason == "ok"
+
+
+class TestRuleEnginePromotionKind:
+    def setup_method(self):
+        self.engine = RuleEngine()
+
+    def test_white_pawn_reaching_row_zero_promotes_to_queen(self):
+        pawn = Piece('w', PieceKind.PAWN)
+        board = board_with(((1, 0), pawn))
+        assert self.engine.promotion_kind(board, pawn, Position(0, 0)) is PieceKind.QUEEN
+
+    def test_black_pawn_reaching_last_row_promotes_to_queen(self):
+        pawn = Piece('b', PieceKind.PAWN)
+        board = board_with(((6, 0), pawn))
+        assert self.engine.promotion_kind(board, pawn, Position(7, 0)) is PieceKind.QUEEN
+
+    def test_pawn_not_on_last_row_does_not_promote(self):
+        pawn = Piece('w', PieceKind.PAWN)
+        board = board_with(((4, 0), pawn))
+        assert self.engine.promotion_kind(board, pawn, Position(3, 0)) is None
+
+    def test_non_pawn_never_promotes(self):
+        rook = Piece('w', PieceKind.ROOK)
+        board = board_with(((1, 0), rook))
+        assert self.engine.promotion_kind(board, rook, Position(0, 0)) is None

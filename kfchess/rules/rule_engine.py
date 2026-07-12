@@ -27,8 +27,10 @@ class RuleEngine:
     rule, injected at construction (defaults to kfchess.rules.piece_rules).
 
     Out of scope by design: check, pins, checkmate, castling, en
-    passant, promotion, and game-over handling. The only win condition
-    (capturing the king) and game-over bookkeeping live in GameEngine.
+    passant, and game-over handling. The only win condition (capturing
+    the king) and game-over bookkeeping live in GameEngine. Promotion
+    eligibility (like move legality) is delegated per-kind to a
+    PieceRule; RuleEngine only dispatches, it doesn't decide.
     """
 
     def __init__(self, rules: Optional[Dict[PieceKind, Type[PieceRule]]] = None):
@@ -54,3 +56,8 @@ class RuleEngine:
             return MoveValidation.ok()
 
         return MoveValidation.invalid(MoveRejectionReason.ILLEGAL_PIECE_MOVE)
+
+    def promotion_kind(self, board: Board, piece, to_pos: Position) -> Optional[PieceKind]:
+        """Returns the kind `piece` should become after landing on to_pos, or None if it doesn't promote."""
+        rule = self._rules[piece.kind]
+        return rule.promotion_kind(board, piece, to_pos)

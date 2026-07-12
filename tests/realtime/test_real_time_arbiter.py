@@ -307,3 +307,37 @@ class TestNoPremoveIncidentalBehavior:
         assert second_outcomes[0].status is MoveOutcomeStatus.ABORTED_PREMOVE
         assert board.get(Position(0, 5)) is None
         assert board.get(Position(0, 1)) is rook
+
+
+class TestPawnPromotion:
+    def test_white_pawn_reaching_last_row_becomes_queen(self):
+        pawn = Piece('w', PieceKind.PAWN)
+        board = board_with(((1, 0), pawn))
+        arbiter = make_arbiter(board)
+
+        arbiter.begin_move(pawn, Position(1, 0), Position(0, 0))
+        outcomes = arbiter.advance(DEFAULT_MOVE_DELAY_MS)
+
+        assert outcomes[0].status is MoveOutcomeStatus.EXECUTED
+        assert pawn.kind is PieceKind.QUEEN
+
+    def test_black_pawn_reaching_last_row_becomes_queen(self):
+        pawn = Piece('b', PieceKind.PAWN)
+        board = board_with(((6, 0), pawn))
+        arbiter = make_arbiter(board)
+
+        arbiter.begin_move(pawn, Position(6, 0), Position(7, 0))
+        outcomes = arbiter.advance(DEFAULT_MOVE_DELAY_MS)
+
+        assert outcomes[0].status is MoveOutcomeStatus.EXECUTED
+        assert pawn.kind is PieceKind.QUEEN
+
+    def test_pawn_not_on_last_row_stays_a_pawn(self):
+        pawn = Piece('w', PieceKind.PAWN)
+        board = board_with(((4, 0), pawn))
+        arbiter = make_arbiter(board)
+
+        arbiter.begin_move(pawn, Position(4, 0), Position(3, 0))
+        arbiter.advance(DEFAULT_MOVE_DELAY_MS)
+
+        assert pawn.kind is PieceKind.PAWN

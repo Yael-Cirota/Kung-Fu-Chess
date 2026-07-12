@@ -112,6 +112,10 @@ class RealTimeArbiter:
         if captured is not None:
             captured.state = PieceState.CAPTURED
 
+        promoted_kind = self._rule_engine.promotion_kind(self._board, piece, to_pos)
+        if promoted_kind is not None:
+            piece.kind = promoted_kind
+
         self._release(piece)
 
         return MoveOutcome(

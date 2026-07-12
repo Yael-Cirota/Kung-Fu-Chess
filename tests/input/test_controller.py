@@ -1,7 +1,7 @@
-from kfchess.model.piece import King, Rook
+from kfchess.model.piece import Piece, PieceKind
 from kfchess.model.board import Board
 from kfchess.model.position import Position
-from kfchess.rules.move_result import MoveRejectionReason, MoveValidationResult
+from kfchess.rules.move_result import MoveRejectionReason, MoveValidation
 from kfchess.input.board_mapper import BoardMapper
 from kfchess.input.controller import Controller
 
@@ -24,7 +24,7 @@ class FakeGameEngine:
         self._board = board
         self._moving = moving_pieces or set()
         self.game_over = game_over
-        self._next_result = next_result if next_result is not None else MoveValidationResult.ok()
+        self._next_result = next_result if next_result is not None else MoveValidation.ok()
         self.request_move_calls = []
 
     def is_within_bounds(self, pos):
@@ -55,7 +55,7 @@ class TestControllerSelection:
         assert controller.selected is None
 
     def test_click_piece_selects_it(self):
-        king = King('w')
+        king = Piece('w', PieceKind.KING)
         engine = FakeGameEngine(board_with(((2, 3), king)))
         controller = make_controller(engine)
 
@@ -64,7 +64,7 @@ class TestControllerSelection:
         assert controller.selected == Position(2, 3)
 
     def test_click_outside_board_is_ignored(self):
-        king = King('w')
+        king = Piece('w', PieceKind.KING)
         engine = FakeGameEngine(board_with(((0, 0), king)))
         controller = make_controller(engine)
 
@@ -73,8 +73,8 @@ class TestControllerSelection:
         assert controller.selected is None
 
     def test_click_friendly_piece_replaces_selection(self):
-        king = King('w')
-        rook = Rook('w')
+        king = Piece('w', PieceKind.KING)
+        rook = Piece('w', PieceKind.ROOK)
         engine = FakeGameEngine(board_with(((0, 0), king), ((0, 1), rook)))
         controller = make_controller(engine)
 
@@ -84,8 +84,8 @@ class TestControllerSelection:
         assert controller.selected == Position(0, 1)
 
     def test_click_friendly_moving_piece_keeps_current_selection(self):
-        king = King('w')
-        rook = Rook('w')
+        king = Piece('w', PieceKind.KING)
+        rook = Piece('w', PieceKind.ROOK)
         engine = FakeGameEngine(board_with(((0, 0), king), ((0, 1), rook)), moving_pieces={rook})
         controller = make_controller(engine)
 
@@ -95,13 +95,13 @@ class TestControllerSelection:
         assert controller.selected == Position(0, 0)
 
     def test_failsafe_clears_selection_when_selected_piece_is_missing(self):
-        rook = Rook('w')
+        rook = Piece('w', PieceKind.ROOK)
         board = board_with(((0, 0), rook))
         engine = FakeGameEngine(board)
         controller = make_controller(engine)
 
         controller.on_click(50, 50)  # select rook at (0,0)
-        board.remove(Position(0, 0))  # out-of-band mutation removes the selected piece
+        board.move_piece(Position(0, 0))  # out-of-band mutation removes the selected piece
 
         controller.on_click(150, 50)  # triggers failsafe branch
 
@@ -111,7 +111,7 @@ class TestControllerSelection:
 
 class TestControllerJump:
     def test_clicking_the_selected_piece_again_requests_a_jump(self):
-        rook = Rook('w')
+        rook = Piece('w', PieceKind.ROOK)
         engine = FakeGameEngine(board_with(((4, 0), rook)))
         controller = make_controller(engine)
 
@@ -124,7 +124,7 @@ class TestControllerJump:
 
 class TestControllerMoveAttempts:
     def test_legal_move_calls_request_move_and_clears_selection(self):
-        rook = Rook('w')
+        rook = Piece('w', PieceKind.ROOK)
         engine = FakeGameEngine(board_with(((4, 0), rook)))
         controller = make_controller(engine)
 
@@ -135,10 +135,10 @@ class TestControllerMoveAttempts:
         assert controller.selected is None
 
     def test_illegal_move_still_calls_request_move_and_clears_selection(self):
-        rook = Rook('w')
+        rook = Piece('w', PieceKind.ROOK)
         engine = FakeGameEngine(
             board_with(((4, 0), rook)),
-            next_result=MoveValidationResult.reject(MoveRejectionReason.NOT_A_LEGAL_SHAPE),
+            next_result=MoveValidation.invalid(MoveRejectionReason.ILLEGAL_PIECE_MOVE),
         )
         controller = make_controller(engine)
 
@@ -151,7 +151,7 @@ class TestControllerMoveAttempts:
 
 class TestControllerGameOver:
     def test_click_ignored_when_game_is_over(self):
-        king = King('w')
+        king = Piece('w', PieceKind.KING)
         engine = FakeGameEngine(board_with(((0, 0), king)), game_over=True)
         controller = make_controller(engine)
 

@@ -1,4 +1,4 @@
-from kfchess.model.piece import King, Pawn
+from kfchess.model.piece import PieceKind
 from kfchess.texttests.script_parser import (
     ScriptParser, ClickCommand, WaitCommand, PrintBoardCommand,
     create_piece, parse_board_grid, parse_command_line,
@@ -11,7 +11,7 @@ class TestCreatePiece:
 
     def test_known_piece_returns_instance(self):
         piece = create_piece('wK')
-        assert isinstance(piece, King)
+        assert piece.kind is PieceKind.KING
         assert piece.color == 'w'
 
     def test_unknown_piece_type_returns_none(self):
@@ -23,10 +23,10 @@ class TestParseBoardGrid:
         raw = 'wK .\n. bP'
         grid = parse_board_grid(raw)
 
-        assert isinstance(grid[0][0], King)
+        assert grid[0][0].kind is PieceKind.KING
         assert grid[0][1] is None
         assert grid[1][0] is None
-        assert isinstance(grid[1][1], Pawn)
+        assert grid[1][1].kind is PieceKind.PAWN
         assert grid[1][1].color == 'b'
 
 
@@ -77,7 +77,7 @@ class TestScriptParser:
 
         script = ScriptParser().parse(vpl_input)
 
-        assert isinstance(script.board_grid[0][0], King)
+        assert script.board_grid[0][0].kind is PieceKind.KING
         assert script.error is None
         assert script.commands == [
             ClickCommand(50, 50), WaitCommand(1000), PrintBoardCommand(),

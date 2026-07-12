@@ -1,4 +1,4 @@
-from kfchess.model.piece import Rook, Pawn
+from kfchess.model.piece import Piece, PieceKind
 from kfchess.model.board import Board
 from kfchess.model.position import Position
 from kfchess.rules.move_result import MoveRejectionReason
@@ -17,76 +17,69 @@ def board_with(*pieces_at):
 
 
 class TestRuleEngineValidate:
+    def setup_method(self):
+        self.engine = RuleEngine()
+
     def test_destination_out_of_bounds(self):
-        rook = Rook('w')
+        rook = Piece('w', PieceKind.ROOK)
         board = board_with(((0, 0), rook))
-        result = RuleEngine.validate(board, Position(0, 0), Position(0, 8))
-        assert result.legal is False
-        assert result.reason is MoveRejectionReason.OUT_OF_BOUNDS
+        result = self.engine.validate(board, Position(0, 0), Position(0, 8))
+        assert result.is_valid is False
+        assert result.reason == MoveRejectionReason.OUTSIDE_BOARD
 
     def test_origin_out_of_bounds(self):
         board = board_with()
-        result = RuleEngine.validate(board, Position(-1, 0), Position(0, 0))
-        assert result.legal is False
-        assert result.reason is MoveRejectionReason.OUT_OF_BOUNDS
+        result = self.engine.validate(board, Position(-1, 0), Position(0, 0))
+        assert result.is_valid is False
+        assert result.reason == MoveRejectionReason.OUTSIDE_BOARD
 
-    def test_empty_origin(self):
+    def test_empty_source(self):
         board = board_with()
-        result = RuleEngine.validate(board, Position(4, 4), Position(4, 5))
-        assert result.legal is False
-        assert result.reason is MoveRejectionReason.EMPTY_ORIGIN
+        result = self.engine.validate(board, Position(4, 4), Position(4, 5))
+        assert result.is_valid is False
+        assert result.reason == MoveRejectionReason.EMPTY_SOURCE
 
     def test_same_cell_destination_is_a_legal_jump(self):
-        rook = Rook('w')
+        rook = Piece('w', PieceKind.ROOK)
         board = board_with(((4, 4), rook))
-        result = RuleEngine.validate(board, Position(4, 4), Position(4, 4))
-        assert result.legal is True
-        assert result.reason is None
+        result = self.engine.validate(board, Position(4, 4), Position(4, 4))
+        assert result.is_valid is True
+        assert result.reason == "ok"
 
-    def test_illegal_shape(self):
-        rook = Rook('w')
+    def test_illegal_piece_move(self):
+        rook = Piece('w', PieceKind.ROOK)
         board = board_with(((0, 0), rook))
-        result = RuleEngine.validate(board, Position(0, 0), Position(1, 1))
-        assert result.legal is False
-        assert result.reason is MoveRejectionReason.NOT_A_LEGAL_SHAPE
+        result = self.engine.validate(board, Position(0, 0), Position(1, 1))
+        assert result.is_valid is False
+        assert result.reason == MoveRejectionReason.ILLEGAL_PIECE_MOVE
 
-    def test_blocked_path_reported_as_blocked(self):
-        rook = Rook('w')
-        blocker = Pawn('b')
+    def test_blocked_path_is_reported_as_illegal_piece_move(self):
+        rook = Piece('w', PieceKind.ROOK)
+        blocker = Piece('b', PieceKind.PAWN)
         board = board_with(((4, 0), rook), ((4, 3), blocker))
-        result = RuleEngine.validate(board, Position(4, 0), Position(4, 7))
-        assert result.legal is False
-        assert result.reason is MoveRejectionReason.BLOCKED
+        result = self.engine.validate(board, Position(4, 0), Position(4, 7))
+        assert result.is_valid is False
+        assert result.reason == MoveRejectionReason.ILLEGAL_PIECE_MOVE
 
-    def test_blocked_path_for_non_sliding_piece_is_still_not_a_legal_shape(self):
-        # Knights jump, so an intervening piece never blocks them - a
-        # rejected knight move is always NOT_A_LEGAL_SHAPE, never BLOCKED.
-        from kfchess.model.piece import Knight
-        knight = Knight('w')
-        board = board_with(((4, 4), knight))
-        result = RuleEngine.validate(board, Position(4, 4), Position(4, 6))
-        assert result.legal is False
-        assert result.reason is MoveRejectionReason.NOT_A_LEGAL_SHAPE
-
-    def test_friendly_fire(self):
-        rook = Rook('w')
-        friend = Pawn('w')
+    def test_friendly_destination(self):
+        rook = Piece('w', PieceKind.ROOK)
+        friend = Piece('w', PieceKind.PAWN)
         board = board_with(((0, 0), rook), ((0, 7), friend))
-        result = RuleEngine.validate(board, Position(0, 0), Position(0, 7))
-        assert result.legal is False
-        assert result.reason is MoveRejectionReason.FRIENDLY_FIRE
+        result = self.engine.validate(board, Position(0, 0), Position(0, 7))
+        assert result.is_valid is False
+        assert result.reason == MoveRejectionReason.FRIENDLY_DESTINATION
 
     def test_legal_move_is_ok(self):
-        rook = Rook('w')
+        rook = Piece('w', PieceKind.ROOK)
         board = board_with(((0, 0), rook))
-        result = RuleEngine.validate(board, Position(0, 0), Position(0, 7))
-        assert result.legal is True
-        assert result.reason is None
+        result = self.engine.validate(board, Position(0, 0), Position(0, 7))
+        assert result.is_valid is True
+        assert result.reason == "ok"
 
     def test_legal_capture_is_ok(self):
-        rook = Rook('w')
-        enemy = Pawn('b')
+        rook = Piece('w', PieceKind.ROOK)
+        enemy = Piece('b', PieceKind.PAWN)
         board = board_with(((0, 0), rook), ((0, 7), enemy))
-        result = RuleEngine.validate(board, Position(0, 0), Position(0, 7))
-        assert result.legal is True
-        assert result.reason is None
+        result = self.engine.validate(board, Position(0, 0), Position(0, 7))
+        assert result.is_valid is True
+        assert result.reason == "ok"

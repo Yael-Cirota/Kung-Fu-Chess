@@ -1,4 +1,4 @@
-from kfchess.model.piece import King, Rook
+from kfchess.model.piece import Piece, PieceKind
 from kfchess.model.board import Board
 from kfchess.model.position import Position
 from kfchess.engine.game_snapshot import GameSnapshot, PieceView
@@ -24,7 +24,7 @@ class TestGameSnapshot:
         assert snapshot.cols == 4
 
     def test_piece_at_returns_piece_view_with_symbol_and_color(self):
-        king = King('w')
+        king = Piece('w', PieceKind.KING)
         board = board_with(((0, 0), king))
         snapshot = GameSnapshot.of(board, clock_ms=0, game_over=False)
 
@@ -48,11 +48,11 @@ class TestGameSnapshot:
         assert snapshot.game_over is True
 
     def test_snapshot_is_immutable_to_later_board_mutation(self):
-        rook = Rook('w')
+        rook = Piece('w', PieceKind.ROOK)
         board = board_with(((0, 0), rook))
         snapshot = GameSnapshot.of(board, clock_ms=0, game_over=False)
 
-        board.remove(Position(0, 0))
+        board.move_piece(Position(0, 0))
         board.set(Position(0, 1), rook)
 
         assert snapshot.piece_at(Position(0, 0)) is not None

@@ -1,4 +1,4 @@
-from kfchess.model.piece import King, Rook, Bishop, Pawn, Queen, DEFAULT_MOVE_DELAY_MS
+from kfchess.model.piece import Piece, PieceKind, DEFAULT_MOVE_DELAY_MS
 from kfchess.model.board import Board
 from kfchess.model.position import Position
 from kfchess.rules.rule_engine import RuleEngine
@@ -22,7 +22,7 @@ def make_arbiter(board):
 
 class TestTiming:
     def test_distance_one_matures_after_exactly_one_delay_unit(self):
-        rook = Rook('w')
+        rook = Piece('w', PieceKind.ROOK)
         board = board_with(((0, 0), rook))
         arbiter = make_arbiter(board)
 
@@ -35,7 +35,7 @@ class TestTiming:
         assert outcomes[0].status is MoveOutcomeStatus.EXECUTED
 
     def test_chebyshev_distance_uses_max_axis_not_sum(self):
-        bishop = Bishop('w')
+        bishop = Piece('w', PieceKind.BISHOP)
         board = board_with(((2, 2), bishop))
         arbiter = make_arbiter(board)
 
@@ -50,7 +50,7 @@ class TestTiming:
         assert board.get(Position(5, 5)) is bishop
 
     def test_two_phase_advance_before_and_after_arrival(self):
-        rook = Rook('w')
+        rook = Piece('w', PieceKind.ROOK)
         board = board_with(((0, 0), rook))
         arbiter = make_arbiter(board)
 
@@ -67,8 +67,8 @@ class TestTiming:
 
 class TestAbortOutcomes:
     def test_premove_abort_when_origin_no_longer_holds_the_piece(self):
-        rook = Rook('w')
-        impostor = Pawn('w')
+        rook = Piece('w', PieceKind.ROOK)
+        impostor = Piece('w', PieceKind.PAWN)
         board = board_with(((0, 0), rook))
         arbiter = make_arbiter(board)
 
@@ -82,8 +82,8 @@ class TestAbortOutcomes:
         assert arbiter.is_moving(rook) is False
 
     def test_path_blocked_at_arrival_aborts(self):
-        rook = Rook('w')
-        blocker = Pawn('b')
+        rook = Piece('w', PieceKind.ROOK)
+        blocker = Piece('b', PieceKind.PAWN)
         board = board_with(((4, 0), rook))
         arbiter = make_arbiter(board)
 
@@ -97,8 +97,8 @@ class TestAbortOutcomes:
         assert board.get(Position(4, 7)) is None
 
     def test_friendly_destination_at_arrival_aborts(self):
-        rook = Rook('w')
-        friend = Pawn('w')
+        rook = Piece('w', PieceKind.ROOK)
+        friend = Piece('w', PieceKind.PAWN)
         board = board_with(((0, 0), rook))
         arbiter = make_arbiter(board)
 
@@ -114,8 +114,8 @@ class TestAbortOutcomes:
 
 class TestCaptureReporting:
     def test_successful_capture_reports_captured_piece(self):
-        rook = Rook('w')
-        enemy = Pawn('b')
+        rook = Piece('w', PieceKind.ROOK)
+        enemy = Piece('b', PieceKind.PAWN)
         board = board_with(((0, 0), rook), ((0, 7), enemy))
         arbiter = make_arbiter(board)
 
@@ -126,7 +126,7 @@ class TestCaptureReporting:
         assert outcomes[0].captured_piece is enemy
 
     def test_move_to_empty_square_reports_no_capture(self):
-        rook = Rook('w')
+        rook = Piece('w', PieceKind.ROOK)
         board = board_with(((0, 0), rook))
         arbiter = make_arbiter(board)
 
@@ -138,7 +138,7 @@ class TestCaptureReporting:
 
 class TestJump:
     def test_jump_matures_after_exactly_jump_duration_and_lands_normally(self):
-        king = King('w')
+        king = Piece('w', PieceKind.KING)
         board = board_with(((4, 4), king))
         arbiter = make_arbiter(board)
 
@@ -153,7 +153,7 @@ class TestJump:
         assert board.get(Position(4, 4)) is king
 
     def test_piece_remains_on_its_own_cell_throughout_the_jump(self):
-        king = King('w')
+        king = Piece('w', PieceKind.KING)
         board = board_with(((4, 4), king))
         arbiter = make_arbiter(board)
 
@@ -163,7 +163,7 @@ class TestJump:
         assert board.get(Position(4, 4)) is king
 
     def test_is_airborne_true_during_jump_and_false_after_landing(self):
-        king = King('w')
+        king = Piece('w', PieceKind.KING)
         board = board_with(((4, 4), king))
         arbiter = make_arbiter(board)
 
@@ -178,8 +178,8 @@ class TestJump:
         assert arbiter.is_moving(king) is False
 
     def test_enemy_arrival_during_jump_window_is_captured_by_airborne_defender(self):
-        attacker = Rook('w')
-        defender = Rook('b')
+        attacker = Piece('w', PieceKind.ROOK)
+        defender = Piece('b', PieceKind.ROOK)
         board = board_with(((4, 3), attacker), ((4, 4), defender))
         arbiter = make_arbiter(board)
 
@@ -203,8 +203,8 @@ class TestJump:
         assert arbiter.is_airborne(defender) is False
 
     def test_enemy_arrival_after_jump_has_already_landed_captures_normally(self):
-        attacker = Rook('w')
-        defender = Rook('b')
+        attacker = Piece('w', PieceKind.ROOK)
+        defender = Piece('b', PieceKind.ROOK)
         board = board_with(((4, 3), attacker), ((4, 4), defender))
         arbiter = make_arbiter(board)
 
@@ -222,7 +222,7 @@ class TestJump:
 
 class TestIsMovingLifecycle:
     def test_is_moving_true_immediately_after_begin_move(self):
-        rook = Rook('w')
+        rook = Piece('w', PieceKind.ROOK)
         board = board_with(((0, 0), rook))
         arbiter = make_arbiter(board)
 
@@ -231,7 +231,7 @@ class TestIsMovingLifecycle:
         assert arbiter.is_moving(rook) is True
 
     def test_is_moving_false_after_execution(self):
-        rook = Rook('w')
+        rook = Piece('w', PieceKind.ROOK)
         board = board_with(((0, 0), rook))
         arbiter = make_arbiter(board)
 
@@ -241,8 +241,8 @@ class TestIsMovingLifecycle:
         assert arbiter.is_moving(rook) is False
 
     def test_is_moving_false_after_abort(self):
-        rook = Rook('w')
-        impostor = Pawn('w')
+        rook = Piece('w', PieceKind.ROOK)
+        impostor = Piece('w', PieceKind.PAWN)
         board = board_with(((0, 0), rook))
         arbiter = make_arbiter(board)
 
@@ -253,7 +253,7 @@ class TestIsMovingLifecycle:
         assert arbiter.is_moving(rook) is False
 
     def test_is_moving_false_when_never_scheduled(self):
-        rook = Rook('w')
+        rook = Piece('w', PieceKind.ROOK)
         board = board_with(((0, 0), rook))
         arbiter = make_arbiter(board)
 
@@ -262,8 +262,8 @@ class TestIsMovingLifecycle:
 
 class TestCancelAllPending:
     def test_cancel_all_pending_prevents_future_pending_moves_from_executing(self):
-        rook = Rook('w')
-        bishop = Bishop('w')
+        rook = Piece('w', PieceKind.ROOK)
+        bishop = Piece('w', PieceKind.BISHOP)
         board = board_with(((0, 0), rook), ((2, 2), bishop))
         arbiter = make_arbiter(board)
 
@@ -290,7 +290,7 @@ class TestNoPremoveIncidentalBehavior:
         premove-identity check, since the origin square no longer holds
         the piece it was scheduled against.
         """
-        rook = Rook('w')
+        rook = Piece('w', PieceKind.ROOK)
         board = board_with(((0, 0), rook))
         arbiter = make_arbiter(board)
 
@@ -305,42 +305,3 @@ class TestNoPremoveIncidentalBehavior:
         assert second_outcomes[0].status is MoveOutcomeStatus.ABORTED_PREMOVE
         assert board.get(Position(0, 5)) is None
         assert board.get(Position(0, 1)) is rook
-
-
-class TestPawnPromotion:
-    def test_white_pawn_reaching_row_zero_promotes_to_queen(self):
-        pawn = Pawn('w')
-        board = board_with(((1, 3), pawn))
-        arbiter = make_arbiter(board)
-
-        arbiter.begin_move(pawn, Position(1, 3), Position(0, 3))
-        outcomes = arbiter.advance(DEFAULT_MOVE_DELAY_MS)
-
-        assert outcomes[0].status is MoveOutcomeStatus.EXECUTED
-        promoted = board.get(Position(0, 3))
-        assert isinstance(promoted, Queen)
-        assert promoted.color == 'w'
-        assert arbiter.is_moving(pawn) is False
-
-    def test_black_pawn_reaching_last_row_promotes_to_queen(self):
-        pawn = Pawn('b')
-        board = board_with(((6, 3), pawn))
-        arbiter = make_arbiter(board)
-
-        arbiter.begin_move(pawn, Position(6, 3), Position(7, 3))
-        outcomes = arbiter.advance(DEFAULT_MOVE_DELAY_MS)
-
-        assert outcomes[0].status is MoveOutcomeStatus.EXECUTED
-        promoted = board.get(Position(7, 3))
-        assert isinstance(promoted, Queen)
-        assert promoted.color == 'b'
-
-    def test_pawn_not_reaching_last_row_does_not_promote(self):
-        pawn = Pawn('w')
-        board = board_with(((4, 3), pawn))
-        arbiter = make_arbiter(board)
-
-        arbiter.begin_move(pawn, Position(4, 3), Position(3, 3))
-        arbiter.advance(DEFAULT_MOVE_DELAY_MS)
-
-        assert board.get(Position(3, 3)) is pawn

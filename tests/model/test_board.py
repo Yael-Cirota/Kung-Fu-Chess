@@ -51,19 +51,29 @@ class TestBoardCellAccess:
         assert board.get(Position(2, 5)) is None
         assert board.get(Position(3, 4)) is None
 
+    def test_set_on_occupied_cell_overwrites_it(self):
+        first_piece = object()
+        second_piece = object()
+        board = Board(make_grid())
+        board.set(Position(2, 4), first_piece)
+
+        board.set(Position(2, 4), second_piece)
+
+        assert board.get(Position(2, 4)) is second_piece
+
     def test_remove_clears_cell_and_returns_previous_occupant(self):
         piece = object()
         board = Board(make_grid())
         board.set(Position(1, 1), piece)
 
-        removed = board.remove(Position(1, 1))
+        removed = board.move_piece(Position(1, 1))
 
         assert removed is piece
         assert board.get(Position(1, 1)) is None
 
-    def test_remove_on_empty_cell_returns_none(self):
+    def test_move_piece_on_empty_cell_returns_none(self):
         board = Board(make_grid())
-        assert board.remove(Position(0, 0)) is None
+        assert board.move_piece(Position(0, 0)) is None
 
 
 class TestBoardFromGrid:

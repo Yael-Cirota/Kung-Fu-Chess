@@ -1,7 +1,7 @@
 from typing import List, Set
 
 from kfchess.model.board import Board
-from kfchess.model.piece import Pawn, Queen
+from kfchess.model.piece import PieceState
 from kfchess.model.position import Position
 from kfchess.rules.rule_engine import RuleEngine
 from kfchess.realtime.motion import MoveOutcome, MoveOutcomeStatus, PendingMove
@@ -46,6 +46,7 @@ class RealTimeArbiter:
 
         self._pending.append(PendingMove(piece, from_pos, to_pos, execute_at))
         self._moving.add(piece)
+        piece.state = PieceState.MOVING
 
     def advance(self, ms: int) -> List[MoveOutcome]:
         self._clock_ms += ms
@@ -69,6 +70,8 @@ class RealTimeArbiter:
     def _release(self, piece) -> None:
         self._moving.discard(piece)
         self._airborne.discard(piece)
+        if piece.state is not PieceState.CAPTURED:
+            piece.state = PieceState.IDLE
 
     def _mature(self, move: PendingMove, still_airborne: frozenset) -> MoveOutcome:
         piece, from_pos, to_pos = move.piece, move.from_pos, move.to_pos
@@ -82,26 +85,23 @@ class RealTimeArbiter:
             return MoveOutcome(MoveOutcomeStatus.EXECUTED, piece, from_pos, to_pos)
 
         result = self._rule_engine.validate(self._board, from_pos, to_pos)
-        if not result.legal:
+        if not result.is_valid:
             self._release(piece)
             return MoveOutcome(MoveOutcomeStatus.ABORTED_ILLEGAL, piece, from_pos, to_pos)
 
         defender = self._board.get(to_pos)
         if defender is not None and defender in still_airborne:
-            self._board.remove(from_pos)
+            self._board.move_piece(from_pos)
+            piece.state = PieceState.CAPTURED
             self._release(piece)
             return MoveOutcome(MoveOutcomeStatus.CAPTURED_ON_ARRIVAL, piece, from_pos, to_pos)
 
         captured = defender
         self._board.set(to_pos, piece)
-        self._board.remove(from_pos)
+        self._board.move_piece(from_pos)
         piece.has_moved = True
-
-        last_row = 0 if piece.color == 'w' else self._board.rows - 1
-        if isinstance(piece, Pawn) and to_pos.row == last_row:
-            promoted = Queen(piece.color)
-            promoted.has_moved = True
-            self._board.set(to_pos, promoted)
+        if captured is not None:
+            captured.state = PieceState.CAPTURED
 
         self._release(piece)
 

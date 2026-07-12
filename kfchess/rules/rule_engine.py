@@ -1,35 +1,56 @@
+from typing import Dict, Optional, Type
+
 from kfchess.model.board import Board
+from kfchess.model.piece import PieceKind
 from kfchess.model.position import Position
-from kfchess.rules.move_result import MoveRejectionReason, MoveValidationResult
-from kfchess.rules.movement_rules import MovementRules
+from kfchess.rules.move_result import MoveRejectionReason, MoveValidation
+from kfchess.rules.piece_rules import (
+    PieceRule, RookRule, BishopRule, QueenRule, KnightRule, KingRule, PawnRule,
+)
+
+DEFAULT_RULES: Dict[PieceKind, Type[PieceRule]] = {
+    PieceKind.ROOK: RookRule,
+    PieceKind.BISHOP: BishopRule,
+    PieceKind.QUEEN: QueenRule,
+    PieceKind.KNIGHT: KnightRule,
+    PieceKind.KING: KingRule,
+    PieceKind.PAWN: PawnRule,
+}
 
 
 class RuleEngine:
     """
-    Move validation only. Read-only with respect to the board.
-    Returns a stable reason indicator instead of a plain boolean.
+    Answers exactly one question: given a source cell and a destination
+    cell, is this move command legal right now? Read-only with respect
+    to the board - never moves pieces, removes captures, or otherwise
+    mutates game state. Delegates destination geometry to a per-kind
+    rule, injected at construction (defaults to kfchess.rules.piece_rules).
+
+    Out of scope by design: check, pins, checkmate, castling, en
+    passant, promotion, and game-over handling. The only win condition
+    (capturing the king) and game-over bookkeeping live in GameEngine.
     """
 
-    @staticmethod
-    def validate(board: Board, from_pos: Position, to_pos: Position) -> MoveValidationResult:
+    def __init__(self, rules: Optional[Dict[PieceKind, Type[PieceRule]]] = None):
+        self._rules = rules if rules is not None else DEFAULT_RULES
+
+    def validate(self, board: Board, from_pos: Position, to_pos: Position) -> MoveValidation:
         if not board.is_within_bounds(from_pos) or not board.is_within_bounds(to_pos):
-            return MoveValidationResult.reject(MoveRejectionReason.OUT_OF_BOUNDS)
+            return MoveValidation.invalid(MoveRejectionReason.OUTSIDE_BOARD)
 
         piece = board.get(from_pos)
         if piece is None:
-            return MoveValidationResult.reject(MoveRejectionReason.EMPTY_ORIGIN)
+            return MoveValidation.invalid(MoveRejectionReason.EMPTY_SOURCE)
 
         if from_pos == to_pos:
-            return MoveValidationResult.ok()
-
-        if not MovementRules.geometry_matches(board, piece, from_pos, to_pos):
-            return MoveValidationResult.reject(MoveRejectionReason.NOT_A_LEGAL_SHAPE)
-
-        if MovementRules.requires_clear_path(piece) and not MovementRules.is_path_clear(board, from_pos, to_pos):
-            return MoveValidationResult.reject(MoveRejectionReason.BLOCKED)
+            return MoveValidation.ok()
 
         target = board.get(to_pos)
         if target is not None and target.color == piece.color:
-            return MoveValidationResult.reject(MoveRejectionReason.FRIENDLY_FIRE)
+            return MoveValidation.invalid(MoveRejectionReason.FRIENDLY_DESTINATION)
 
-        return MoveValidationResult.ok()
+        rule = self._rules[piece.kind]
+        if to_pos in rule.legal_destinations(board, piece):
+            return MoveValidation.ok()
+
+        return MoveValidation.invalid(MoveRejectionReason.ILLEGAL_PIECE_MOVE)

@@ -1,41 +1,33 @@
-from kfchess.rules.move_result import MoveRejectionReason, MoveValidationResult
+from kfchess.rules.move_result import MoveRejectionReason, MoveValidation
 
 
 class TestMoveRejectionReason:
-    def test_members_are_distinct(self):
-        members = list(MoveRejectionReason)
-        assert len(members) == len(set(members))
-
-    def test_expected_members_exist(self):
-        expected = {
-            "OUT_OF_BOUNDS",
-            "EMPTY_ORIGIN",
-            "NOT_A_LEGAL_SHAPE",
-            "BLOCKED",
-            "FRIENDLY_FIRE",
-            "PIECE_ALREADY_MOVING",
-            "GAME_OVER",
-        }
-        actual = {member.name for member in MoveRejectionReason}
-        assert expected <= actual
+    def test_expected_reasons_are_stable_strings(self):
+        assert MoveRejectionReason.OK == "ok"
+        assert MoveRejectionReason.OUTSIDE_BOARD == "outside_board"
+        assert MoveRejectionReason.EMPTY_SOURCE == "empty_source"
+        assert MoveRejectionReason.FRIENDLY_DESTINATION == "friendly_destination"
+        assert MoveRejectionReason.ILLEGAL_PIECE_MOVE == "illegal_piece_move"
+        assert MoveRejectionReason.PIECE_ALREADY_MOVING == "piece_already_moving"
+        assert MoveRejectionReason.GAME_OVER == "game_over"
 
 
-class TestMoveValidationResult:
-    def test_ok_is_legal_with_no_reason(self):
-        result = MoveValidationResult.ok()
-        assert result.legal is True
-        assert result.reason is None
+class TestMoveValidation:
+    def test_ok_is_valid_with_ok_reason(self):
+        result = MoveValidation.ok()
+        assert result.is_valid is True
+        assert result.reason == "ok"
 
-    def test_reject_is_illegal_with_given_reason(self):
-        result = MoveValidationResult.reject(MoveRejectionReason.BLOCKED)
-        assert result.legal is False
-        assert result.reason is MoveRejectionReason.BLOCKED
+    def test_invalid_carries_given_reason(self):
+        result = MoveValidation.invalid(MoveRejectionReason.FRIENDLY_DESTINATION)
+        assert result.is_valid is False
+        assert result.reason == MoveRejectionReason.FRIENDLY_DESTINATION
 
     def test_equality(self):
-        assert MoveValidationResult.ok() == MoveValidationResult.ok()
-        assert MoveValidationResult.reject(
-            MoveRejectionReason.FRIENDLY_FIRE
-        ) == MoveValidationResult.reject(MoveRejectionReason.FRIENDLY_FIRE)
-        assert MoveValidationResult.reject(
-            MoveRejectionReason.FRIENDLY_FIRE
-        ) != MoveValidationResult.reject(MoveRejectionReason.BLOCKED)
+        assert MoveValidation.ok() == MoveValidation.ok()
+        assert MoveValidation.invalid(
+            MoveRejectionReason.FRIENDLY_DESTINATION
+        ) == MoveValidation.invalid(MoveRejectionReason.FRIENDLY_DESTINATION)
+        assert MoveValidation.invalid(
+            MoveRejectionReason.FRIENDLY_DESTINATION
+        ) != MoveValidation.invalid(MoveRejectionReason.ILLEGAL_PIECE_MOVE)

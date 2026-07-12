@@ -2,11 +2,11 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Union
 
 from kfchess.io.board_parser import BoardValidator, BoardParser
-from kfchess.model.piece import King, Queen, Rook, Bishop, Knight, Pawn
+from kfchess.model.piece import Piece, PieceKind
 
-_PIECE_CLASSES = {
-    'K': King, 'Q': Queen, 'R': Rook,
-    'B': Bishop, 'N': Knight, 'P': Pawn,
+_PIECE_KINDS = {
+    'K': PieceKind.KING, 'Q': PieceKind.QUEEN, 'R': PieceKind.ROOK,
+    'B': PieceKind.BISHOP, 'N': PieceKind.KNIGHT, 'P': PieceKind.PAWN,
 }
 
 
@@ -16,8 +16,8 @@ def create_piece(token: str):
         return None
 
     color, piece_type = token[0], token[1]
-    piece_class = _PIECE_CLASSES.get(piece_type)
-    return piece_class(color) if piece_class else None
+    kind = _PIECE_KINDS.get(piece_type)
+    return Piece(color, kind) if kind else None
 
 
 def parse_board_grid(raw_board_string: str) -> List[list]:

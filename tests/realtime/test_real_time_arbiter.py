@@ -271,9 +271,13 @@ class TestAbort:
         arbiter.begin_move(rook, Position(0, 0), Position(0, 7))
         arbiter.abort(rook)
 
+        outcomes = arbiter.advance(7 * DEFAULT_MOVE_DELAY_MS)
+
+        assert outcomes == []
         assert arbiter.is_moving(rook) is False
         assert rook.state is PieceState.IDLE
         assert board.get(Position(0, 0)) is rook
+        assert board.get(Position(0, 7)) is None
 
 
 class TestCancelAllPending:

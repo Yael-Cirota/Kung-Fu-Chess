@@ -1,3 +1,5 @@
+import pytest
+
 from kfchess.model.piece import PieceKind
 from kfchess.texttests.script_parser import (
     ScriptParser, ClickCommand, WaitCommand, PrintBoardCommand, JumpCommand,
@@ -49,15 +51,8 @@ class TestParseCommandLine:
     def test_parse_unknown_command(self):
         assert parse_command_line("move a2 a4") is None
 
-    def test_parse_click_non_integer_returns_none(self):
-        assert parse_command_line("click abc 250") is None
-
     def test_parse_wait_non_integer_returns_none(self):
         assert parse_command_line("wait xyz") is None
-
-    def test_parse_click_wrong_arg_count(self):
-        assert parse_command_line("click 100") is None
-        assert parse_command_line("click 100 200 300") is None
 
     def test_parse_click_with_extra_whitespace(self):
         cmd = parse_command_line("  click  50  75  ")
@@ -67,12 +62,14 @@ class TestParseCommandLine:
         cmd = parse_command_line("jump 150 250")
         assert cmd == JumpCommand(150, 250)
 
-    def test_parse_jump_non_integer_returns_none(self):
-        assert parse_command_line("jump abc 250") is None
+    @pytest.mark.parametrize("keyword", ["click", "jump"])
+    def test_parse_non_integer_returns_none(self, keyword):
+        assert parse_command_line(f"{keyword} abc 250") is None
 
-    def test_parse_jump_wrong_arg_count(self):
-        assert parse_command_line("jump 100") is None
-        assert parse_command_line("jump 100 200 300") is None
+    @pytest.mark.parametrize("keyword", ["click", "jump"])
+    def test_parse_wrong_arg_count(self, keyword):
+        assert parse_command_line(f"{keyword} 100") is None
+        assert parse_command_line(f"{keyword} 100 200 300") is None
 
 
 class TestScriptParser:

@@ -162,6 +162,8 @@ class TestGameOver:
         engine.wait(DEFAULT_MOVE_DELAY_MS)
 
         assert engine.game_over is False
+        assert board.get(Position(0, 0)) is king
+        assert board.get(Position(0, 1)) is friend
 
     def test_request_move_rejected_once_game_is_over(self):
         attacker = Piece('w', PieceKind.ROOK)

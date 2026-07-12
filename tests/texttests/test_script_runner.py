@@ -67,12 +67,21 @@ class TestScriptRunnerRun:
         assert output == "wR . .\n. . wR\n"
 
     def test_jump_command_requests_a_move_back_to_the_same_square(self):
+        # A same-square move never mutates the board, so a broken (no-op)
+        # JumpCommand handler would produce this exact output too. The
+        # click/click pair after the jump proves the jump actually fired:
+        # if it did, the rook is still mid-flight and this second move
+        # request is rejected as MOTION_IN_PROGRESS; if the jump were a
+        # no-op, this request would succeed and move the rook to (0, 2)
+        # within the wait window, changing the printed board.
         vpl_input = (
             "Board:\n"
             "wR . .\n"
             "Commands:\n"
             "jump 50 50\n"
-            "wait 1000\n"
+            "click 50 50\n"
+            "click 250 50\n"
+            "wait 2000\n"
             "print board"
         )
 

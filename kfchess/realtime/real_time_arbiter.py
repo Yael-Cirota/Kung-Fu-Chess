@@ -70,6 +70,7 @@ class RealTimeArbiter:
         return [self._mature(move, still_airborne) for move in ready]
 
     def abort(self, piece) -> None:
+        self._pending = [m for m in self._pending if m.piece is not piece]
         self._release(piece)
 
     def cancel_all_pending(self) -> None:

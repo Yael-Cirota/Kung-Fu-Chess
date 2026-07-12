@@ -1,7 +1,7 @@
 from kfchess.model.piece import Piece, PieceKind
 from kfchess.model.board import Board
 from kfchess.model.position import Position
-from kfchess.rules.move_result import MoveRejectionReason
+from kfchess.rules.move_validation import MoveRejectionReason
 from kfchess.rules.rule_engine import RuleEngine
 
 

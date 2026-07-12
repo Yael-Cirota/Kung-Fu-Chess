@@ -59,7 +59,7 @@ class ScriptRunner:
         if isinstance(command, ClickCommand):
             controller.on_click(command.x, command.y)
         elif isinstance(command, WaitCommand):
-            game_engine.advance_clock(command.ms)
+            game_engine.wait(command.ms)
         elif isinstance(command, PrintBoardCommand):
             printer.print(game_engine.snapshot())
         elif isinstance(command, JumpCommand):

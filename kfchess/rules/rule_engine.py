@@ -3,7 +3,7 @@ from typing import Dict, Optional, Type
 from kfchess.model.board import Board
 from kfchess.model.piece import PieceKind
 from kfchess.model.position import Position
-from kfchess.rules.move_result import MoveRejectionReason, MoveValidation
+from kfchess.rules.move_validation import MoveRejectionReason, MoveValidation
 from kfchess.rules.piece_rules import (
     PieceRule, RookRule, BishopRule, QueenRule, KnightRule, KingRule, PawnRule,
 )

@@ -1,4 +1,4 @@
-from kfchess.rules.move_result import MoveRejectionReason, MoveValidation
+from kfchess.rules.move_validation import MoveRejectionReason, MoveValidation
 
 
 class TestMoveRejectionReason:
@@ -8,7 +8,7 @@ class TestMoveRejectionReason:
         assert MoveRejectionReason.EMPTY_SOURCE == "empty_source"
         assert MoveRejectionReason.FRIENDLY_DESTINATION == "friendly_destination"
         assert MoveRejectionReason.ILLEGAL_PIECE_MOVE == "illegal_piece_move"
-        assert MoveRejectionReason.PIECE_ALREADY_MOVING == "piece_already_moving"
+        assert MoveRejectionReason.MOTION_IN_PROGRESS == "motion_in_progress"
         assert MoveRejectionReason.GAME_OVER == "game_over"
 
 

@@ -3,9 +3,6 @@ from typing import Optional
 
 from kfchess.model.position import Position
 
-DEFAULT_MOVE_DELAY_MS = 1000
-
-
 class Color(str, Enum):
     WHITE = 'w'
     BLACK = 'b'
@@ -29,8 +26,9 @@ class PieceKind(Enum):
 class Piece:
     """
     A single concrete class for all chess pieces, distinguished by `kind`.
-    Encapsulates identity/state only (color, kind, state, has_moved, move_delay_ms).
-    Movement legality lives in kfchess.rules.piece_rules.
+    Encapsulates identity/state only (color, kind, state, has_moved).
+    Movement legality lives in kfchess.rules.piece_rules; movement timing
+    and active-motion tracking live entirely in kfchess.realtime.
     """
     def __init__(self, color: str, kind: PieceKind, cell: Optional[Position] = None):
         self.color = Color(color)
@@ -38,7 +36,6 @@ class Piece:
         self.cell = cell           # type: Position | None
         self.state = PieceState.IDLE
         self.has_moved = False     # Crucial for castling and pawn double-moves
-        self.move_delay_ms = DEFAULT_MOVE_DELAY_MS  # Default move delay
 
     def get_symbol(self) -> str:
         """Returns the 2-character string representation (e.g., 'wK', 'bP')."""

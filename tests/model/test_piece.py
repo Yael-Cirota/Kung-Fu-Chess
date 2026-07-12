@@ -1,5 +1,5 @@
 import pytest
-from kfchess.model.piece import PieceKind, DEFAULT_MOVE_DELAY_MS
+from kfchess.model.piece import PieceKind
 from kfchess.model.piece import Piece
 
 
@@ -12,4 +12,3 @@ class TestPieceData:
         piece = Piece('w', kind)
         assert piece.color == 'w'
         assert piece.has_moved is False
-        assert piece.move_delay_ms == DEFAULT_MOVE_DELAY_MS

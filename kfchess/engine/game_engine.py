@@ -2,17 +2,23 @@ from kfchess.model.piece import PieceKind
 from kfchess.model.board import Board
 from kfchess.model.position import Position
 from kfchess.model.game_state import GameState
-from kfchess.rules.move_result import MoveRejectionReason, MoveValidation
+from kfchess.rules.move_validation import MoveRejectionReason
 from kfchess.rules.rule_engine import RuleEngine
 from kfchess.realtime.real_time_arbiter import RealTimeArbiter
 from kfchess.realtime.motion import MoveOutcomeStatus
 from kfchess.engine.game_snapshot import GameSnapshot
+from kfchess.engine.move_result import MoveResult
 
 
 class GameEngine:
     """
-    Application service layer. Coordinates move validation, movement
-    initiation (via RealTimeArbiter), and termination conditions.
+    Application-service adapter: the public command boundary used by
+    Controller and TextTestRunner. Owns game_over and enforces
+    application-level guards (game over, motion already active on the
+    shared track) before ever asking RuleEngine whether a move is
+    legal. Validated moves are handed to RealTimeArbiter to begin a
+    Motion; simulated time advances there too. Carries no piece rules,
+    pixel mapping, rendering, or text parsing of its own.
     """
 
     def __init__(self, board: Board, rule_engine: RuleEngine, arbiter: RealTimeArbiter):
@@ -45,22 +51,28 @@ class GameEngine:
     def snapshot(self) -> GameSnapshot:
         return GameSnapshot.of(self._board, clock_ms=self.clock_ms, game_over=self.game_over)
 
-    def request_move(self, from_pos: Position, to_pos: Position) -> MoveValidation:
+    def request_move(self, from_pos: Position, to_pos: Position) -> MoveResult:
         if self.game_over:
-            return MoveValidation.invalid(MoveRejectionReason.GAME_OVER)
-
-        result = self._rule_engine.validate(self._board, from_pos, to_pos)
-        if not result.is_valid:
-            return result
+            return MoveResult.rejected(MoveRejectionReason.GAME_OVER)
 
         piece = self._board.get(from_pos)
-        if from_pos == to_pos and self._arbiter.is_moving(piece):
-            return MoveValidation.invalid(MoveRejectionReason.PIECE_ALREADY_MOVING)
+        if piece is not None and self._arbiter.is_moving(piece):
+            return MoveResult.rejected(MoveRejectionReason.MOTION_IN_PROGRESS)
+
+        validation = self._rule_engine.validate(self._board, from_pos, to_pos)
+        if not validation.is_valid:
+            return MoveResult.rejected(validation.reason)
 
         self._arbiter.begin_move(piece, from_pos, to_pos)
-        return MoveValidation.ok()
+        return MoveResult.accepted()
 
-    def advance_clock(self, ms: int) -> None:
+    def wait(self, ms: int) -> None:
+        """
+        Advances simulated time by delegating strictly to RealTimeArbiter,
+        which owns all Motion state and board mutation on arrival.
+        GameEngine never mutates the Board's motion state itself - it only
+        reads the returned outcomes to decide the win condition.
+        """
         outcomes = self._arbiter.advance(ms)
 
         king_captured = any(self._is_king_captured(outcome) for outcome in outcomes)

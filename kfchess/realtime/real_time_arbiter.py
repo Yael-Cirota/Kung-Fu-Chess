@@ -6,7 +6,16 @@ from kfchess.model.position import Position
 from kfchess.rules.rule_engine import RuleEngine
 from kfchess.realtime.motion import MoveOutcome, MoveOutcomeStatus, PendingMove
 
-JUMP_DURATION_MS = 1000
+CELL_SIZE = 100        # pixels
+PIECE_SPEED = 100      # pixels per second
+
+# Deterministic per-cell duration, derived from CELL_SIZE / PIECE_SPEED.
+# Cell-steps (Chebyshev distance), not Euclidean pixel distance, drive
+# timing - a 3-cell diagonal move takes exactly 3x this, same as a
+# 3-cell orthogonal move.
+MOVE_DURATION_MS_PER_CELL = int(CELL_SIZE / PIECE_SPEED * 1000)
+
+JUMP_DURATION_MS = MOVE_DURATION_MS_PER_CELL
 
 
 class RealTimeArbiter:
@@ -42,7 +51,7 @@ class RealTimeArbiter:
             dr = abs(to_pos.row - from_pos.row)
             dc = abs(to_pos.col - from_pos.col)
             distance = max(dr, dc)
-            execute_at = self._clock_ms + distance * piece.move_delay_ms
+            execute_at = self._clock_ms + distance * MOVE_DURATION_MS_PER_CELL
 
         self._pending.append(PendingMove(piece, from_pos, to_pos, execute_at))
         self._moving.add(piece)

@@ -11,7 +11,7 @@ class MoveRejectionReason:
     EMPTY_SOURCE = "empty_source"
     FRIENDLY_DESTINATION = "friendly_destination"
     ILLEGAL_PIECE_MOVE = "illegal_piece_move"
-    PIECE_ALREADY_MOVING = "piece_already_moving"
+    MOTION_IN_PROGRESS = "motion_in_progress"
     GAME_OVER = "game_over"
 
 

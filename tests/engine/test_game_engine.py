@@ -1,9 +1,9 @@
-from kfchess.model.piece import Piece, PieceKind, DEFAULT_MOVE_DELAY_MS
+from kfchess.model.piece import Piece, PieceKind
 from kfchess.model.board import Board
 from kfchess.model.position import Position
-from kfchess.rules.move_result import MoveRejectionReason
+from kfchess.rules.move_validation import MoveRejectionReason
 from kfchess.rules.rule_engine import RuleEngine
-from kfchess.realtime.real_time_arbiter import RealTimeArbiter
+from kfchess.realtime.real_time_arbiter import RealTimeArbiter, MOVE_DURATION_MS_PER_CELL as DEFAULT_MOVE_DELAY_MS
 from kfchess.engine.game_engine import GameEngine
 from kfchess.io.board_printer import BoardPrinter
 
@@ -47,7 +47,7 @@ class TestSnapshot:
         rook = Piece('w', PieceKind.ROOK)
         board = board_with(((0, 0), rook))
         engine = make_engine(board)
-        engine.advance_clock(250)
+        engine.wait(250)
 
         snapshot = engine.snapshot()
 
@@ -75,7 +75,7 @@ class TestRequestMoveLegal:
 
         result = engine.request_move(Position(4, 0), Position(4, 7))
 
-        assert result.is_valid is True
+        assert result.is_accepted is True
         assert engine.is_moving(rook) is True
 
     def test_legal_move_executes_after_clock_advances(self):
@@ -84,7 +84,7 @@ class TestRequestMoveLegal:
         engine = make_engine(board)
 
         engine.request_move(Position(4, 0), Position(4, 7))
-        engine.advance_clock(7 * DEFAULT_MOVE_DELAY_MS)
+        engine.wait(7 * DEFAULT_MOVE_DELAY_MS)
 
         assert board.get(Position(4, 7)) is rook
         assert board.get(Position(4, 0)) is None
@@ -98,7 +98,7 @@ class TestRequestMoveRejections:
 
         result = engine.request_move(Position(4, 0), Position(3, 1))
 
-        assert result.is_valid is False
+        assert result.is_accepted is False
         assert result.reason == MoveRejectionReason.ILLEGAL_PIECE_MOVE
         assert engine.is_moving(rook) is False
 
@@ -129,8 +129,8 @@ class TestClock:
 
     def test_advance_clock_updates_clock_ms(self):
         engine = make_engine(board_with())
-        engine.advance_clock(500)
-        engine.advance_clock(250)
+        engine.wait(500)
+        engine.wait(250)
         assert engine.clock_ms == 750
 
 
@@ -142,7 +142,7 @@ class TestGameOver:
         engine = make_engine(board)
 
         engine.request_move(Position(0, 0), Position(0, 1))
-        engine.advance_clock(DEFAULT_MOVE_DELAY_MS)
+        engine.wait(DEFAULT_MOVE_DELAY_MS)
 
         assert engine.game_over is True
         assert board.get(Position(0, 1)) is attacker
@@ -154,7 +154,7 @@ class TestGameOver:
         engine = make_engine(board)
 
         engine.request_move(Position(0, 0), Position(0, 1))
-        engine.advance_clock(DEFAULT_MOVE_DELAY_MS)
+        engine.wait(DEFAULT_MOVE_DELAY_MS)
 
         assert engine.game_over is False
 
@@ -168,10 +168,10 @@ class TestGameOver:
         engine.request_move(Position(2, 2), Position(5, 5))  # matures at 3000
         engine.request_move(Position(0, 0), Position(0, 1))  # matures at 1000, captures king
 
-        engine.advance_clock(DEFAULT_MOVE_DELAY_MS)
+        engine.wait(DEFAULT_MOVE_DELAY_MS)
         assert engine.game_over is True
 
-        engine.advance_clock(2 * DEFAULT_MOVE_DELAY_MS)
+        engine.wait(2 * DEFAULT_MOVE_DELAY_MS)
         assert board.get(Position(2, 2)) is bystander
         assert board.get(Position(5, 5)) is None
 
@@ -183,12 +183,12 @@ class TestGameOver:
         engine = make_engine(board)
 
         engine.request_move(Position(0, 0), Position(0, 1))
-        engine.advance_clock(DEFAULT_MOVE_DELAY_MS)
+        engine.wait(DEFAULT_MOVE_DELAY_MS)
         assert engine.game_over is True
 
         result = engine.request_move(Position(4, 4), Position(4, 5))
 
-        assert result.is_valid is False
+        assert result.is_accepted is False
         assert result.reason == MoveRejectionReason.GAME_OVER
         assert engine.is_moving(bystander) is False
 
@@ -200,10 +200,10 @@ class TestJump:
         engine = make_engine(board)
 
         result = engine.request_move(Position(4, 4), Position(4, 4))
-        assert result.is_valid is True
+        assert result.is_accepted is True
         assert engine.is_moving(rook) is True
 
-        engine.advance_clock(DEFAULT_MOVE_DELAY_MS)
+        engine.wait(DEFAULT_MOVE_DELAY_MS)
         assert engine.is_moving(rook) is False
         assert board.get(Position(4, 4)) is rook
 
@@ -215,8 +215,8 @@ class TestJump:
         engine.request_move(Position(4, 4), Position(4, 7))
         result = engine.request_move(Position(4, 4), Position(4, 4))
 
-        assert result.is_valid is False
-        assert result.reason == MoveRejectionReason.PIECE_ALREADY_MOVING
+        assert result.is_accepted is False
+        assert result.reason == MoveRejectionReason.MOTION_IN_PROGRESS
 
     def test_king_destroyed_by_airborne_defender_sets_game_over(self):
         attacker = Piece('w', PieceKind.KING)
@@ -225,10 +225,10 @@ class TestJump:
         engine = make_engine(board)
 
         engine.request_move(Position(4, 3), Position(4, 4))  # king begins walking in, matures at 1000
-        engine.advance_clock(500)
+        engine.wait(500)
         engine.request_move(Position(4, 4), Position(4, 4))  # defender jumps, matures at 1500
 
-        engine.advance_clock(500)  # clock now 1000: king arrives while defender still airborne
+        engine.wait(500)  # clock now 1000: king arrives while defender still airborne
 
         assert engine.game_over is True
         assert board.get(Position(4, 3)) is None

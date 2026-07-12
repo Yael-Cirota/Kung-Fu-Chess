@@ -150,6 +150,19 @@ class TestGameOver:
         assert board.get(Position(2, 2)) is bystander
         assert board.get(Position(5, 5)) is None
 
+    def test_aborted_move_does_not_set_game_over(self):
+        king = Piece('w', PieceKind.KING)
+        friend = Piece('w', PieceKind.PAWN)
+        board = board_with(((0, 0), king))
+        engine = make_engine(board)
+
+        engine.request_move(Position(0, 0), Position(0, 1))
+        board.set(Position(0, 1), friend)  # friendly piece appears before arrival, aborting the move
+
+        engine.wait(DEFAULT_MOVE_DELAY_MS)
+
+        assert engine.game_over is False
+
     def test_request_move_rejected_once_game_is_over(self):
         attacker = Piece('w', PieceKind.ROOK)
         king = Piece('b', PieceKind.KING)

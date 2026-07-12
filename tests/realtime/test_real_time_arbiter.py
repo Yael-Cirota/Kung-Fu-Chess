@@ -1,4 +1,4 @@
-from kfchess.model.piece import Piece, PieceKind
+from kfchess.model.piece import Piece, PieceKind, PieceState
 from kfchess.model.board import Board
 from kfchess.model.position import Position
 from kfchess.rules.rule_engine import RuleEngine
@@ -260,6 +260,20 @@ class TestIsMovingLifecycle:
         arbiter = make_arbiter(board)
 
         assert arbiter.is_moving(rook) is False
+
+
+class TestAbort:
+    def test_abort_releases_piece_and_prevents_it_from_maturing(self):
+        rook = Piece('w', PieceKind.ROOK)
+        board = board_with(((0, 0), rook))
+        arbiter = make_arbiter(board)
+
+        arbiter.begin_move(rook, Position(0, 0), Position(0, 7))
+        arbiter.abort(rook)
+
+        assert arbiter.is_moving(rook) is False
+        assert rook.state is PieceState.IDLE
+        assert board.get(Position(0, 0)) is rook
 
 
 class TestCancelAllPending:

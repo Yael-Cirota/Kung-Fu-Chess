@@ -1,6 +1,6 @@
 from kfchess.model.piece import PieceKind
 from kfchess.texttests.script_parser import (
-    ScriptParser, ClickCommand, WaitCommand, PrintBoardCommand,
+    ScriptParser, ClickCommand, WaitCommand, PrintBoardCommand, JumpCommand,
     create_piece, parse_board_grid, parse_command_line,
 )
 
@@ -62,6 +62,17 @@ class TestParseCommandLine:
     def test_parse_click_with_extra_whitespace(self):
         cmd = parse_command_line("  click  50  75  ")
         assert cmd == ClickCommand(50, 75)
+
+    def test_parse_jump(self):
+        cmd = parse_command_line("jump 150 250")
+        assert cmd == JumpCommand(150, 250)
+
+    def test_parse_jump_non_integer_returns_none(self):
+        assert parse_command_line("jump abc 250") is None
+
+    def test_parse_jump_wrong_arg_count(self):
+        assert parse_command_line("jump 100") is None
+        assert parse_command_line("jump 100 200 300") is None
 
 
 class TestScriptParser:

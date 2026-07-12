@@ -65,3 +65,17 @@ class TestScriptRunnerRun:
         output = ScriptRunner().run(vpl_input)
 
         assert output == "wR . .\n. . wR\n"
+
+    def test_jump_command_requests_a_move_back_to_the_same_square(self):
+        vpl_input = (
+            "Board:\n"
+            "wR . .\n"
+            "Commands:\n"
+            "jump 50 50\n"
+            "wait 1000\n"
+            "print board"
+        )
+
+        output = ScriptRunner().run(vpl_input)
+
+        assert output == "wR . .\n"

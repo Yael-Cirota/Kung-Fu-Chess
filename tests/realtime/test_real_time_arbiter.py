@@ -2,6 +2,9 @@ from kfchess.model.piece import Piece, PieceKind, PieceState
 from kfchess.model.board import Board
 from kfchess.model.position import Position
 from kfchess.rules.rule_engine import RuleEngine
+from kfchess.realtime.cooldown import (
+    CooldownPolicy, DEFAULT_MOVE_COOLDOWN_MS, DEFAULT_JUMP_COOLDOWN_MS,
+)
 from kfchess.realtime.real_time_arbiter import (
     RealTimeArbiter, MoveOutcomeStatus, JUMP_DURATION_MS, MOVE_DURATION_MS_PER_CELL as DEFAULT_MOVE_DELAY_MS,
 )
@@ -18,8 +21,8 @@ def board_with(*pieces_at):
     return Board(grid)
 
 
-def make_arbiter(board):
-    return RealTimeArbiter(board, RuleEngine())
+def make_arbiter(board, cooldown_policy=None):
+    return RealTimeArbiter(board, RuleEngine(), cooldown_policy=cooldown_policy)
 
 
 class TestTiming:
@@ -359,3 +362,90 @@ class TestPawnPromotion:
         arbiter.advance(DEFAULT_MOVE_DELAY_MS)
 
         assert pawn.kind is PieceKind.PAWN
+
+
+class TestCooldown:
+    def test_piece_is_not_on_cooldown_before_it_has_ever_moved(self):
+        rook = Piece('w', PieceKind.ROOK)
+        board = board_with(((0, 0), rook))
+        arbiter = make_arbiter(board)
+
+        assert arbiter.is_on_cooldown(rook) is False
+
+    def test_piece_is_on_cooldown_immediately_after_a_move_lands(self):
+        rook = Piece('w', PieceKind.ROOK)
+        board = board_with(((0, 0), rook))
+        arbiter = make_arbiter(board, CooldownPolicy(move_cooldown_ms=200, jump_cooldown_ms=900))
+
+        arbiter.begin_move(rook, Position(0, 0), Position(0, 1))
+        arbiter.advance(DEFAULT_MOVE_DELAY_MS)
+
+        assert arbiter.is_on_cooldown(rook) is True
+
+    def test_move_cooldown_expires_after_its_own_configured_duration(self):
+        rook = Piece('w', PieceKind.ROOK)
+        board = board_with(((0, 0), rook))
+        arbiter = make_arbiter(board, CooldownPolicy(move_cooldown_ms=200, jump_cooldown_ms=900))
+
+        arbiter.begin_move(rook, Position(0, 0), Position(0, 1))
+        arbiter.advance(DEFAULT_MOVE_DELAY_MS)  # move lands, cooldown starts
+
+        arbiter.advance(199)
+        assert arbiter.is_on_cooldown(rook) is True
+
+        arbiter.advance(1)
+        assert arbiter.is_on_cooldown(rook) is False
+
+    def test_jump_cooldown_uses_its_own_configured_duration_not_move_duration(self):
+        king = Piece('w', PieceKind.KING)
+        board = board_with(((4, 4), king))
+        arbiter = make_arbiter(board, CooldownPolicy(move_cooldown_ms=200, jump_cooldown_ms=900))
+
+        arbiter.begin_move(king, Position(4, 4), Position(4, 4))
+        arbiter.advance(JUMP_DURATION_MS)  # jump lands, cooldown starts
+
+        arbiter.advance(899)
+        assert arbiter.is_on_cooldown(king) is True
+
+        arbiter.advance(1)
+        assert arbiter.is_on_cooldown(king) is False
+
+    def test_default_policy_gives_jump_and_move_different_durations(self):
+        assert DEFAULT_MOVE_COOLDOWN_MS != DEFAULT_JUMP_COOLDOWN_MS
+
+        rook = Piece('w', PieceKind.ROOK)
+        board = board_with(((0, 0), rook))
+        arbiter = make_arbiter(board)
+
+        arbiter.begin_move(rook, Position(0, 0), Position(0, 1))
+        arbiter.advance(DEFAULT_MOVE_DELAY_MS)
+        arbiter.advance(DEFAULT_MOVE_COOLDOWN_MS)
+
+        assert arbiter.is_on_cooldown(rook) is False
+
+    def test_aborted_move_does_not_start_a_cooldown(self):
+        rook = Piece('w', PieceKind.ROOK)
+        impostor = Piece('w', PieceKind.PAWN)
+        board = board_with(((0, 0), rook))
+        arbiter = make_arbiter(board)
+
+        arbiter.begin_move(rook, Position(0, 0), Position(0, 7))
+        board.set(Position(0, 0), impostor)  # origin no longer holds `rook`
+        arbiter.advance(7 * DEFAULT_MOVE_DELAY_MS)
+
+        assert arbiter.is_on_cooldown(rook) is False
+
+    def test_piece_on_cooldown_can_move_again_once_it_expires(self):
+        rook = Piece('w', PieceKind.ROOK)
+        board = board_with(((0, 0), rook))
+        arbiter = make_arbiter(board, CooldownPolicy(move_cooldown_ms=200, jump_cooldown_ms=900))
+
+        arbiter.begin_move(rook, Position(0, 0), Position(0, 1))
+        arbiter.advance(DEFAULT_MOVE_DELAY_MS)
+        assert arbiter.is_on_cooldown(rook) is True
+
+        arbiter.advance(200)
+        assert arbiter.is_on_cooldown(rook) is False
+
+        arbiter.begin_move(rook, Position(0, 1), Position(0, 2))
+        assert arbiter.is_moving(rook) is True

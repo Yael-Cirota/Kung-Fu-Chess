@@ -3,7 +3,10 @@ from kfchess.model.board import Board
 from kfchess.model.position import Position
 from kfchess.rules.move_validation import MoveRejectionReason
 from kfchess.rules.rule_engine import RuleEngine
-from kfchess.realtime.real_time_arbiter import RealTimeArbiter, MOVE_DURATION_MS_PER_CELL as DEFAULT_MOVE_DELAY_MS
+from kfchess.realtime.cooldown import CooldownPolicy
+from kfchess.realtime.real_time_arbiter import (
+    RealTimeArbiter, JUMP_DURATION_MS, MOVE_DURATION_MS_PER_CELL as DEFAULT_MOVE_DELAY_MS,
+)
 from kfchess.engine.game_engine import GameEngine
 
 
@@ -18,9 +21,9 @@ def board_with(*pieces_at):
     return Board(grid)
 
 
-def make_engine(board):
+def make_engine(board, cooldown_policy=None):
     rule_engine = RuleEngine()
-    arbiter = RealTimeArbiter(board, rule_engine)
+    arbiter = RealTimeArbiter(board, rule_engine, cooldown_policy=cooldown_policy)
     return GameEngine(board, rule_engine, arbiter)
 
 
@@ -223,3 +226,49 @@ class TestJump:
         assert engine.game_over is True
         assert board.get(Position(4, 3)) is None
         assert board.get(Position(4, 4)) is defender
+
+
+class TestCooldown:
+    def test_move_is_rejected_while_piece_is_on_post_move_cooldown(self):
+        rook = Piece('w', PieceKind.ROOK)
+        board = board_with(((0, 0), rook))
+        engine = make_engine(board, CooldownPolicy(move_cooldown_ms=200, jump_cooldown_ms=900))
+
+        engine.request_move(Position(0, 0), Position(0, 1))
+        engine.wait(DEFAULT_MOVE_DELAY_MS)  # move lands, cooldown starts
+
+        result = engine.request_move(Position(0, 1), Position(0, 2))
+
+        assert result.is_accepted is False
+        assert result.reason == MoveRejectionReason.COOLDOWN_ACTIVE
+        assert engine.is_moving(rook) is False
+
+    def test_move_is_accepted_again_once_cooldown_expires(self):
+        rook = Piece('w', PieceKind.ROOK)
+        board = board_with(((0, 0), rook))
+        engine = make_engine(board, CooldownPolicy(move_cooldown_ms=200, jump_cooldown_ms=900))
+
+        engine.request_move(Position(0, 0), Position(0, 1))
+        engine.wait(DEFAULT_MOVE_DELAY_MS)
+        engine.wait(200)  # cooldown expires
+
+        result = engine.request_move(Position(0, 1), Position(0, 2))
+
+        assert result.is_accepted is True
+
+    def test_jump_cooldown_is_independent_of_move_cooldown(self):
+        king = Piece('w', PieceKind.KING)
+        board = board_with(((4, 4), king))
+        engine = make_engine(board, CooldownPolicy(move_cooldown_ms=200, jump_cooldown_ms=900))
+
+        engine.request_move(Position(4, 4), Position(4, 4))  # jump in place
+        engine.wait(JUMP_DURATION_MS)  # jump lands, jump cooldown starts
+
+        engine.wait(200)  # long enough for a move cooldown, not a jump cooldown
+        still_rejected = engine.request_move(Position(4, 4), Position(4, 5))
+        assert still_rejected.is_accepted is False
+        assert still_rejected.reason == MoveRejectionReason.COOLDOWN_ACTIVE
+
+        engine.wait(700)  # total 900ms since landing: jump cooldown now expired
+        result = engine.request_move(Position(4, 4), Position(4, 5))
+        assert result.is_accepted is True

@@ -14,10 +14,11 @@ class GameEngine:
     Application-service adapter: the public command boundary used by
     Controller and TextTestRunner. Owns game_over and enforces
     application-level guards (game over, motion already active on the
-    shared track) before ever asking RuleEngine whether a move is
-    legal. Validated moves are handed to RealTimeArbiter to begin a
-    Motion; simulated time advances there too. Carries no piece rules,
-    pixel mapping, rendering, or text parsing of its own.
+    shared track, post-motion cooldown) before ever asking RuleEngine
+    whether a move is legal. Validated moves are handed to
+    RealTimeArbiter to begin a Motion; simulated time advances there
+    too. Carries no piece rules, pixel mapping, rendering, or text
+    parsing of its own.
     """
 
     def __init__(self, board: Board, rule_engine: RuleEngine, arbiter: RealTimeArbiter):
@@ -54,6 +55,9 @@ class GameEngine:
         piece = self._board.get(from_pos)
         if piece is not None and self._arbiter.is_moving(piece):
             return MoveResult.rejected(MoveRejectionReason.MOTION_IN_PROGRESS)
+
+        if piece is not None and self._arbiter.is_on_cooldown(piece):
+            return MoveResult.rejected(MoveRejectionReason.COOLDOWN_ACTIVE)
 
         validation = self._rule_engine.validate(self._board, from_pos, to_pos)
         if not validation.is_valid:

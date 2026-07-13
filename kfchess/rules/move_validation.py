@@ -12,6 +12,7 @@ class MoveRejectionReason:
     FRIENDLY_DESTINATION = "friendly_destination"
     ILLEGAL_PIECE_MOVE = "illegal_piece_move"
     MOTION_IN_PROGRESS = "motion_in_progress"
+    COOLDOWN_ACTIVE = "cooldown_active"
     GAME_OVER = "game_over"
 
 

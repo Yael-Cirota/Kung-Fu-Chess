@@ -1,9 +1,9 @@
-from typing import List, Set
-
+from typing import List, Optional, Set
 from kfchess.model.board import Board
 from kfchess.model.piece import PieceState
 from kfchess.model.position import Position
 from kfchess.rules.rule_engine import RuleEngine
+from kfchess.realtime.cooldown import CooldownPolicy, CooldownTracker
 from kfchess.realtime.motion import MoveOutcome, MoveOutcomeStatus, PendingMove
 
 CELL_SIZE = 100        # pixels
@@ -22,12 +22,22 @@ class RealTimeArbiter:
     """
     Manages active movement objects, advances simulated time, and
     performs atomic execution of arrival and capture. The board is
-    mutated only here, only atomically, only on arrival.
+    mutated only here, only atomically, only on arrival. Post-motion
+    cooldown is delegated to CooldownPolicy (duration) and
+    CooldownTracker (per-piece expiry bookkeeping) - this class only
+    decides when a cooldown starts.
     """
 
-    def __init__(self, board: Board, rule_engine: RuleEngine):
+    def __init__(
+        self,
+        board: Board,
+        rule_engine: RuleEngine,
+        cooldown_policy: Optional[CooldownPolicy] = None,
+    ):
         self._board = board
         self._rule_engine = rule_engine
+        self._cooldown_policy = cooldown_policy if cooldown_policy is not None else CooldownPolicy()
+        self._cooldowns = CooldownTracker()
         self._clock_ms = 0
         self._pending: List[PendingMove] = []
         self._moving: Set = set()
@@ -42,6 +52,9 @@ class RealTimeArbiter:
 
     def is_airborne(self, piece) -> bool:
         return piece in self._airborne
+
+    def is_on_cooldown(self, piece) -> bool:
+        return self._cooldowns.is_active(piece, self._clock_ms)
 
     def begin_move(self, piece, from_pos: Position, to_pos: Position) -> None:
         if from_pos == to_pos:
@@ -88,10 +101,11 @@ class RealTimeArbiter:
 
         if self._board.get(from_pos) is not piece:
             self._release(piece)
-            return MoveOutcome(MoveOutcomeStatus.ABORTED_PREMOVE, piece, from_pos, to_pos)
+            return MoveOutcome(MoveOutcomeStatus.ABORTED_PREMOVE, piece, from_pos, to_pos)  
 
         if from_pos == to_pos:
             self._release(piece)
+            self._start_cooldown(piece, move.execute_at, is_jump=True)
             return MoveOutcome(MoveOutcomeStatus.EXECUTED, piece, from_pos, to_pos)
 
         result = self._rule_engine.validate(self._board, from_pos, to_pos)
@@ -118,7 +132,12 @@ class RealTimeArbiter:
             piece.kind = promoted_kind
 
         self._release(piece)
+        self._start_cooldown(piece, move.execute_at, is_jump=False)
 
         return MoveOutcome(
             MoveOutcomeStatus.EXECUTED, piece, from_pos, to_pos, captured_piece=captured
         )
+
+    def _start_cooldown(self, piece, matured_at_ms: int, is_jump: bool) -> None:
+        duration_ms = self._cooldown_policy.duration_for(is_jump)
+        self._cooldowns.start(piece, matured_at_ms + duration_ms)

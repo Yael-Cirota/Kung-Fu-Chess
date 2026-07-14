@@ -33,29 +33,18 @@ class TestRookRule:
         assert Position(0, 0) not in destinations
         assert Position(7, 7) not in destinations
 
-    def test_stops_before_friendly_blocker(self):
+    def test_reaches_through_and_past_occupants_because_occupancy_is_ignored(self):
+        # Pattern-only geometry: a blocker (friendly or enemy) neither
+        # stops the ray nor is excluded - collisions are resolved in flight.
         rook = Piece('w', PieceKind.ROOK)
         friendly = Piece('w', PieceKind.ROOK)
-        board = board_with(((4, 0), rook), ((4, 3), friendly))
-
-        destinations = RookRule.legal_destinations(board, rook)
-
-        assert Position(4, 1) in destinations
-        assert Position(4, 2) in destinations
-        assert Position(4, 3) not in destinations
-        assert Position(4, 4) not in destinations
-
-    def test_includes_enemy_blocker_square_but_not_beyond(self):
-        rook = Piece('w', PieceKind.ROOK)
         enemy = Piece('b', PieceKind.ROOK)
-        board = board_with(((4, 0), rook), ((4, 3), enemy))
+        board = board_with(((4, 0), rook), ((4, 3), friendly), ((4, 6), enemy))
 
         destinations = RookRule.legal_destinations(board, rook)
 
-        assert Position(4, 1) in destinations
-        assert Position(4, 2) in destinations
-        assert Position(4, 3) in destinations
-        assert Position(4, 4) not in destinations
+        for col in range(1, 8):
+            assert Position(4, col) in destinations
 
     def test_does_not_mutate_board_or_pieces(self):
         rook = Piece('w', PieceKind.ROOK)
@@ -82,7 +71,7 @@ class TestBishopRule:
         assert Position(4, 5) not in destinations
         assert Position(3, 4) not in destinations
 
-    def test_stops_before_friendly_and_includes_enemy_blocker(self):
+    def test_reaches_through_and_past_diagonal_occupants(self):
         bishop = Piece('w', PieceKind.BISHOP)
         friendly = Piece('w', PieceKind.BISHOP)
         board = board_with(((0, 0), bishop), ((3, 3), friendly))
@@ -90,8 +79,8 @@ class TestBishopRule:
         destinations = BishopRule.legal_destinations(board, bishop)
 
         assert Position(2, 2) in destinations
-        assert Position(3, 3) not in destinations
-        assert Position(4, 4) not in destinations
+        assert Position(3, 3) in destinations
+        assert Position(4, 4) in destinations
 
 
 class TestQueenRule:
@@ -107,25 +96,19 @@ class TestQueenRule:
         assert Position(7, 7) in destinations
         assert Position(6, 5) not in destinations
 
-    def test_stops_before_friendly_blocker_on_diagonal(self):
+    def test_reaches_through_occupants_on_diagonal_and_rank(self):
         queen = Piece('w', PieceKind.QUEEN)
         friendly = Piece('w', PieceKind.QUEEN)
-        board = board_with(((0, 0), queen), ((3, 3), friendly))
+        enemy = Piece('b', PieceKind.QUEEN)
+        board = board_with(((0, 0), queen), ((3, 3), friendly), ((0, 4), enemy))
 
         destinations = QueenRule.legal_destinations(board, queen)
 
         assert Position(2, 2) in destinations
-        assert Position(3, 3) not in destinations
-
-    def test_includes_enemy_blocker_on_rank(self):
-        queen = Piece('w', PieceKind.QUEEN)
-        enemy = Piece('b', PieceKind.QUEEN)
-        board = board_with(((4, 0), queen), ((4, 3), enemy))
-
-        destinations = QueenRule.legal_destinations(board, queen)
-
-        assert Position(4, 3) in destinations
-        assert Position(4, 4) not in destinations
+        assert Position(3, 3) in destinations
+        assert Position(4, 4) in destinations
+        assert Position(0, 4) in destinations
+        assert Position(0, 7) in destinations
 
 
 class TestKnightRule:
@@ -151,14 +134,14 @@ class TestKnightRule:
         assert Position(6, 5) in destinations
         assert Position(5, 6) in destinations
 
-    def test_excludes_friendly_occupied_landing_square(self):
+    def test_includes_friendly_occupied_landing_square_occupancy_is_ignored(self):
         knight = Piece('w', PieceKind.KNIGHT)
         friendly = Piece('w', PieceKind.ROOK)
         board = board_with(((4, 4), knight), ((6, 5), friendly))
 
         destinations = KnightRule.legal_destinations(board, knight)
 
-        assert Position(6, 5) not in destinations
+        assert Position(6, 5) in destinations
 
     def test_includes_enemy_occupied_landing_square(self):
         knight = Piece('w', PieceKind.KNIGHT)
@@ -184,14 +167,14 @@ class TestKingRule:
         }
         assert destinations == expected
 
-    def test_excludes_friendly_occupied_squares(self):
+    def test_includes_friendly_occupied_squares_occupancy_is_ignored(self):
         king = Piece('w', PieceKind.KING)
         friendly = Piece('w', PieceKind.ROOK)
         board = board_with(((4, 4), king), ((4, 5), friendly))
 
         destinations = KingRule.legal_destinations(board, king)
 
-        assert Position(4, 5) not in destinations
+        assert Position(4, 5) in destinations
 
     def test_includes_enemy_occupied_squares(self):
         king = Piece('w', PieceKind.KING)

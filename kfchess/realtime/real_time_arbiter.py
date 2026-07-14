@@ -1,31 +1,37 @@
-from typing import List, Optional, Set
+from typing import Dict, List, Optional, Set
+
 from kfchess.model.board import Board
-from kfchess.model.piece import PieceState
+from kfchess.model.piece import PieceKind, PieceState
 from kfchess.model.position import Position
 from kfchess.rules.rule_engine import RuleEngine
 from kfchess.realtime.cooldown import CooldownPolicy, CooldownTracker
-from kfchess.realtime.motion import MoveOutcome, MoveOutcomeStatus, PendingMove
-
-CELL_SIZE = 100        # pixels
-PIECE_SPEED = 100      # pixels per second
-
-# Deterministic per-cell duration, derived from CELL_SIZE / PIECE_SPEED.
-# Cell-steps (Chebyshev distance), not Euclidean pixel distance, drive
-# timing - a 3-cell diagonal move takes exactly 3x this, same as a
-# 3-cell orthogonal move.
-MOVE_DURATION_MS_PER_CELL = int(CELL_SIZE / PIECE_SPEED * 1000)
+from kfchess.realtime.motion import Motion, MoveOutcome, MoveOutcomeStatus
+from kfchess.realtime.movement_profile import (
+    MovementProfile, DEFAULT_MOVEMENT_PROFILES, MOVE_DURATION_MS_PER_CELL,
+)
+from kfchess.realtime.collision import (
+    CollisionDetector, CollisionResolver, ResolutionAction,
+)
 
 JUMP_DURATION_MS = MOVE_DURATION_MS_PER_CELL
 
 
 class RealTimeArbiter:
     """
-    Manages active movement objects, advances simulated time, and
-    performs atomic execution of arrival and capture. The board is
-    mutated only here, only atomically, only on arrival. Post-motion
-    cooldown is delegated to CooldownPolicy (duration) and
-    CooldownTracker (per-piece expiry bookkeeping) - this class only
-    decides when a cooldown starts.
+    Movement manager and sole board mutator. Advances simulated time and
+    steps each active Motion one square at a time, so a sliding piece
+    actually occupies the squares along its path while in flight. At every
+    square it delegates: a MovementProfile decides the trajectory, a
+    CollisionDetector classifies what is in the way, and a CollisionResolver
+    turns that into an action (proceed / stop / capture) which this class
+    applies. Post-motion cooldown is delegated to CooldownPolicy and
+    CooldownTracker.
+
+    "Arriving later" is emergent, not hard-coded: each tick the earliest
+    ready step is processed first (ties broken by Motion.seq), so whoever
+    reaches a contested square first occupies it and the later mover then
+    resolves the collision - stopping on its preceding square against a
+    friendly piece, or capturing an enemy.
     """
 
     def __init__(
@@ -33,15 +39,22 @@ class RealTimeArbiter:
         board: Board,
         rule_engine: RuleEngine,
         cooldown_policy: Optional[CooldownPolicy] = None,
+        movement_profiles: Optional[Dict[PieceKind, MovementProfile]] = None,
+        collision_detector: Optional[CollisionDetector] = None,
+        collision_resolver: Optional[CollisionResolver] = None,
     ):
         self._board = board
         self._rule_engine = rule_engine
         self._cooldown_policy = cooldown_policy if cooldown_policy is not None else CooldownPolicy()
+        self._movement_profiles = movement_profiles if movement_profiles is not None else DEFAULT_MOVEMENT_PROFILES
+        self._detector = collision_detector if collision_detector is not None else CollisionDetector()
+        self._resolver = collision_resolver if collision_resolver is not None else CollisionResolver()
         self._cooldowns = CooldownTracker()
         self._clock_ms = 0
-        self._pending: List[PendingMove] = []
+        self._pending: List[Motion] = []
         self._moving: Set = set()
         self._airborne: Set = set()
+        self._next_seq = 0
 
     @property
     def clock_ms(self) -> int:
@@ -57,37 +70,50 @@ class RealTimeArbiter:
         return self._cooldowns.is_active(piece, self._clock_ms)
 
     def begin_move(self, piece, from_pos: Position, to_pos: Position) -> None:
+        self._next_seq += 1
+
         if from_pos == to_pos:
-            execute_at = self._clock_ms + JUMP_DURATION_MS
+            motion = Motion(
+                piece=piece, origin=from_pos, current=from_pos, remaining=[],
+                next_step_at=self._clock_ms + JUMP_DURATION_MS,
+                step_duration_ms=JUMP_DURATION_MS, is_jump=True, seq=self._next_seq,
+            )
             self._airborne.add(piece)
         else:
-            dr = abs(to_pos.row - from_pos.row)
-            dc = abs(to_pos.col - from_pos.col)
-            distance = max(dr, dc)
-            execute_at = self._clock_ms + distance * MOVE_DURATION_MS_PER_CELL
+            profile = self._movement_profiles[piece.kind]
+            step_duration = profile.step_duration_ms(from_pos, to_pos)
+            motion = Motion(
+                piece=piece, origin=from_pos, current=from_pos,
+                remaining=profile.occupied_path(from_pos, to_pos),
+                next_step_at=self._clock_ms + step_duration,
+                step_duration_ms=step_duration, is_jump=False, seq=self._next_seq,
+            )
 
-        self._pending.append(PendingMove(piece, from_pos, to_pos, execute_at))
+        self._pending.append(motion)
         self._moving.add(piece)
         piece.state = PieceState.MOVING
 
     def advance(self, ms: int) -> List[MoveOutcome]:
         self._clock_ms += ms
 
-        ready = sorted(
-            (m for m in self._pending if m.execute_at <= self._clock_ms),
-            key=lambda m: m.execute_at,
-        )
-        self._pending = [m for m in self._pending if m.execute_at > self._clock_ms]
-
-        still_airborne = frozenset(self._airborne)
-        return [self._mature(move, still_airborne) for move in ready]
+        outcomes: List[MoveOutcome] = []
+        while True:
+            ready = [m for m in self._pending if m.next_step_at <= self._clock_ms]
+            if not ready:
+                break
+            motion = min(ready, key=lambda m: (m.next_step_at, m.seq))
+            outcome = self._step(motion)
+            if outcome is not None:
+                self._pending.remove(motion)
+                outcomes.append(outcome)
+        return outcomes
 
     def abort(self, piece) -> None:
         self._pending = [m for m in self._pending if m.piece is not piece]
         self._release(piece)
 
     def cancel_all_pending(self) -> None:
-        """Drops every move not yet matured (used to end all further play, e.g. on game over)."""
+        """Drops every motion still in flight (used to end all further play, e.g. on game over)."""
         self._pending = []
 
     def _release(self, piece) -> None:
@@ -96,47 +122,68 @@ class RealTimeArbiter:
         if piece.state is not PieceState.CAPTURED:
             piece.state = PieceState.IDLE
 
-    def _mature(self, move: PendingMove, still_airborne: frozenset) -> MoveOutcome:
-        piece, from_pos, to_pos = move.piece, move.from_pos, move.to_pos
+    def _step(self, motion: Motion) -> Optional[MoveOutcome]:
+        """
+        Processes one square-step of a motion. Returns a MoveOutcome when
+        the motion terminates (and the caller drops it), or None when the
+        piece merely advanced a square and should keep going.
+        """
+        piece = motion.piece
 
-        if self._board.get(from_pos) is not piece:
+        # The piece must still be standing where we left it; if something
+        # displaced (or captured) it mid-flight, the move is void.
+        if self._board.get(motion.current) is not piece:
             self._release(piece)
-            return MoveOutcome(MoveOutcomeStatus.ABORTED_PREMOVE, piece, from_pos, to_pos)  
+            return MoveOutcome(MoveOutcomeStatus.ABORTED_PREMOVE, piece, motion.origin, motion.target)
 
-        if from_pos == to_pos:
+        if motion.is_jump:
             self._release(piece)
-            self._start_cooldown(piece, move.execute_at, is_jump=True)
-            return MoveOutcome(MoveOutcomeStatus.EXECUTED, piece, from_pos, to_pos)
+            self._start_cooldown(piece, motion.next_step_at, is_jump=True)
+            return MoveOutcome(MoveOutcomeStatus.EXECUTED, piece, motion.origin, motion.current)
 
-        result = self._rule_engine.validate(self._board, from_pos, to_pos)
-        if not result.is_valid:
-            self._release(piece)
-            return MoveOutcome(MoveOutcomeStatus.ABORTED_ILLEGAL, piece, from_pos, to_pos)
+        next_pos = motion.remaining[0]
+        occupant = self._board.get(next_pos)
 
-        defender = self._board.get(to_pos)
-        if defender is not None and defender in still_airborne:
-            self._board.move_piece(from_pos)
+        # A piece jumping in place on the target square destroys whatever
+        # arrives while it is still airborne - the arriver is the loser.
+        if occupant is not None and occupant in self._airborne:
+            self._board.move_piece(motion.current)
             piece.state = PieceState.CAPTURED
             self._release(piece)
-            return MoveOutcome(MoveOutcomeStatus.CAPTURED_ON_ARRIVAL, piece, from_pos, to_pos)
+            return MoveOutcome(MoveOutcomeStatus.CAPTURED_ON_ARRIVAL, piece, motion.origin, next_pos)
 
-        captured = defender
-        self._board.set(to_pos, piece)
-        self._board.move_piece(from_pos)
+        collision_type = self._detector.classify(piece, occupant)
+        resolution = self._resolver.resolve(collision_type, piece, occupant)
+
+        if resolution.action is ResolutionAction.STOP:
+            self._release(piece)
+            self._start_cooldown(piece, motion.next_step_at, is_jump=False)
+            return MoveOutcome(MoveOutcomeStatus.STOPPED_BY_FRIENDLY, piece, motion.origin, motion.current)
+
+        captured = resolution.captured_piece
+        self._board.set(next_pos, piece)
+        self._board.move_piece(motion.current)
         piece.has_moved = True
+        motion.current = next_pos
+        motion.remaining = motion.remaining[1:]
         if captured is not None:
             captured.state = PieceState.CAPTURED
 
-        promoted_kind = self._rule_engine.promotion_kind(self._board, piece, to_pos)
-        if promoted_kind is not None:
-            piece.kind = promoted_kind
+        # A capture halts a slider on the square it took, just as a normal
+        # slide stops at its first capture; otherwise it runs on until the
+        # path is exhausted.
+        if captured is not None or not motion.remaining:
+            promoted_kind = self._rule_engine.promotion_kind(self._board, piece, next_pos)
+            if promoted_kind is not None:
+                piece.kind = promoted_kind
+            self._release(piece)
+            self._start_cooldown(piece, motion.next_step_at, is_jump=False)
+            return MoveOutcome(
+                MoveOutcomeStatus.EXECUTED, piece, motion.origin, next_pos, captured_piece=captured
+            )
 
-        self._release(piece)
-        self._start_cooldown(piece, move.execute_at, is_jump=False)
-
-        return MoveOutcome(
-            MoveOutcomeStatus.EXECUTED, piece, from_pos, to_pos, captured_piece=captured
-        )
+        motion.next_step_at += motion.step_duration_ms
+        return None
 
     def _start_cooldown(self, piece, matured_at_ms: int, is_jump: bool) -> None:
         duration_ms = self._cooldown_policy.duration_for(is_jump)

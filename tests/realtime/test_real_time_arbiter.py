@@ -54,20 +54,24 @@ class TestTiming:
         assert outcomes[0].status is MoveOutcomeStatus.EXECUTED
         assert board.get(Position(5, 5)) is bishop
 
-    def test_two_phase_advance_before_and_after_arrival(self):
+    def test_slider_occupies_intermediate_squares_while_in_flight(self):
         rook = Piece('w', PieceKind.ROOK)
         board = board_with(((0, 0), rook))
         arbiter = make_arbiter(board)
 
         arbiter.begin_move(rook, Position(0, 0), Position(0, 2))
 
-        arbiter.advance(DEFAULT_MOVE_DELAY_MS)
-        assert board.get(Position(0, 0)) is rook
-        assert board.get(Position(0, 2)) is None
-
+        # After one cell-duration the rook has physically advanced one square.
         arbiter.advance(DEFAULT_MOVE_DELAY_MS)
         assert board.get(Position(0, 0)) is None
+        assert board.get(Position(0, 1)) is rook
+        assert board.get(Position(0, 2)) is None
+        assert arbiter.is_moving(rook) is True
+
+        arbiter.advance(DEFAULT_MOVE_DELAY_MS)
+        assert board.get(Position(0, 1)) is None
         assert board.get(Position(0, 2)) is rook
+        assert arbiter.is_moving(rook) is False
 
 
 class TestAbortOutcomes:
@@ -86,34 +90,36 @@ class TestAbortOutcomes:
         assert board.get(Position(0, 7)) is None
         assert arbiter.is_moving(rook) is False
 
-    def test_path_blocked_at_arrival_aborts(self):
+    def test_enemy_in_the_path_is_captured_and_the_slider_stops_there(self):
         rook = Piece('w', PieceKind.ROOK)
-        blocker = Piece('b', PieceKind.PAWN)
+        enemy = Piece('b', PieceKind.PAWN)
         board = board_with(((4, 0), rook))
         arbiter = make_arbiter(board)
 
         arbiter.begin_move(rook, Position(4, 0), Position(4, 7))
-        board.set(Position(4, 3), blocker)  # blocker appears mid-flight
+        board.set(Position(4, 3), enemy)  # enemy sits mid-path
 
         outcomes = arbiter.advance(7 * DEFAULT_MOVE_DELAY_MS)
 
-        assert outcomes[0].status is MoveOutcomeStatus.ABORTED_ILLEGAL
-        assert board.get(Position(4, 0)) is rook
+        assert outcomes[0].status is MoveOutcomeStatus.EXECUTED
+        assert outcomes[0].captured_piece is enemy
+        assert board.get(Position(4, 0)) is None
+        assert board.get(Position(4, 3)) is rook   # stopped on the capture square
         assert board.get(Position(4, 7)) is None
 
-    def test_friendly_destination_at_arrival_aborts(self):
+    def test_friendly_in_the_path_makes_the_slider_stop_one_square_short(self):
         rook = Piece('w', PieceKind.ROOK)
         friend = Piece('w', PieceKind.PAWN)
         board = board_with(((0, 0), rook))
         arbiter = make_arbiter(board)
 
         arbiter.begin_move(rook, Position(0, 0), Position(0, 2))
-        board.set(Position(0, 2), friend)  # friendly piece lands first
+        board.set(Position(0, 2), friend)  # friendly piece sits on the destination
 
         outcomes = arbiter.advance(2 * DEFAULT_MOVE_DELAY_MS)
 
-        assert outcomes[0].status is MoveOutcomeStatus.ABORTED_ILLEGAL
-        assert board.get(Position(0, 0)) is rook
+        assert outcomes[0].status is MoveOutcomeStatus.STOPPED_BY_FRIENDLY
+        assert board.get(Position(0, 1)) is rook   # preceding square
         assert board.get(Position(0, 2)) is friend
 
 
@@ -290,16 +296,18 @@ class TestCancelAllPending:
         board = board_with(((0, 0), rook), ((2, 2), bishop))
         arbiter = make_arbiter(board)
 
-        arbiter.begin_move(rook, Position(0, 0), Position(0, 1))       # matures at 1000
-        arbiter.begin_move(bishop, Position(2, 2), Position(5, 5))     # matures at 3000
+        arbiter.begin_move(rook, Position(0, 0), Position(0, 1))       # finishes at 1000
+        arbiter.begin_move(bishop, Position(2, 2), Position(5, 5))     # steps at 1000/2000/3000
 
-        arbiter.advance(DEFAULT_MOVE_DELAY_MS)  # rook matures
+        arbiter.advance(DEFAULT_MOVE_DELAY_MS)  # rook finishes; bishop takes its first step to (3, 3)
         arbiter.cancel_all_pending()
 
         outcomes = arbiter.advance(3 * DEFAULT_MOVE_DELAY_MS)
 
         assert outcomes == []
-        assert board.get(Position(2, 2)) is bishop
+        # Cancelling drops the bishop's remaining steps: it stays where it
+        # had already advanced to, and never reaches its destination.
+        assert board.get(Position(3, 3)) is bishop
         assert board.get(Position(5, 5)) is None
 
 
@@ -308,10 +316,10 @@ class TestNoPremoveIncidentalBehavior:
         """
         No explicit guard exists against scheduling a second move from a
         piece's origin square while its first move is still in flight.
-        The current, real behavior (which must be preserved, not "fixed"):
-        whichever move matures first wins; the later one then fails its
-        premove-identity check, since the origin square no longer holds
-        the piece it was scheduled against.
+        The real behavior (which must be preserved, not "fixed"): the two
+        first steps are ready on the same tick; the earlier-scheduled one
+        executes first and vacates the origin, so the later one fails its
+        premove-identity check on the very same tick.
         """
         rook = Piece('w', PieceKind.ROOK)
         board = board_with(((0, 0), rook))
@@ -320,14 +328,108 @@ class TestNoPremoveIncidentalBehavior:
         arbiter.begin_move(rook, Position(0, 0), Position(0, 1))
         arbiter.begin_move(rook, Position(0, 0), Position(0, 5))
 
-        first_outcomes = arbiter.advance(DEFAULT_MOVE_DELAY_MS)
-        assert first_outcomes[0].status is MoveOutcomeStatus.EXECUTED
-        assert board.get(Position(0, 1)) is rook
+        outcomes = arbiter.advance(DEFAULT_MOVE_DELAY_MS)
 
-        second_outcomes = arbiter.advance(4 * DEFAULT_MOVE_DELAY_MS)
-        assert second_outcomes[0].status is MoveOutcomeStatus.ABORTED_PREMOVE
-        assert board.get(Position(0, 5)) is None
+        assert outcomes[0].status is MoveOutcomeStatus.EXECUTED
+        assert outcomes[1].status is MoveOutcomeStatus.ABORTED_PREMOVE
         assert board.get(Position(0, 1)) is rook
+        assert board.get(Position(0, 5)) is None
+
+
+class TestCollisionResolution:
+    def test_later_arriver_stops_one_square_short_of_a_friendly_piece(self):
+        first = Piece('w', PieceKind.ROOK)
+        later = Piece('w', PieceKind.ROOK)
+        board = board_with(((0, 0), first), ((0, 5), later))
+        arbiter = make_arbiter(board)
+
+        arbiter.begin_move(first, Position(0, 0), Position(0, 2))   # arrives at 2000
+        arbiter.begin_move(later, Position(0, 5), Position(0, 2))   # would arrive at 3000
+
+        outcomes = arbiter.advance(3 * DEFAULT_MOVE_DELAY_MS)
+
+        statuses = {o.piece: o.status for o in outcomes}
+        assert statuses[first] is MoveOutcomeStatus.EXECUTED
+        assert statuses[later] is MoveOutcomeStatus.STOPPED_BY_FRIENDLY
+        assert board.get(Position(0, 2)) is first
+        assert board.get(Position(0, 3)) is later  # preceding square
+
+    def test_later_arriver_captures_an_enemy_that_arrived_first(self):
+        first = Piece('w', PieceKind.ROOK)
+        later = Piece('b', PieceKind.ROOK)
+        board = board_with(((0, 0), first), ((0, 5), later))
+        arbiter = make_arbiter(board)
+
+        arbiter.begin_move(first, Position(0, 0), Position(0, 2))   # arrives at 2000
+        arbiter.begin_move(later, Position(0, 5), Position(0, 2))   # arrives at 3000
+
+        outcomes = arbiter.advance(3 * DEFAULT_MOVE_DELAY_MS)
+
+        captured = {o.piece: o.captured_piece for o in outcomes}
+        assert captured[later] is first
+        assert board.get(Position(0, 2)) is later
+        assert first.state is PieceState.CAPTURED
+
+    def test_simultaneous_arrival_is_broken_deterministically_by_schedule_order(self):
+        # Both rooks reach (0, 4) on the very same tick; the one scheduled
+        # first occupies it, the later-scheduled one stops one square short.
+        first = Piece('w', PieceKind.ROOK)
+        second = Piece('w', PieceKind.ROOK)
+        board = board_with(((0, 0), first), ((4, 4), second))
+        arbiter = make_arbiter(board)
+
+        arbiter.begin_move(first, Position(0, 0), Position(0, 4))    # arrives at 4000
+        arbiter.begin_move(second, Position(4, 4), Position(0, 4))   # arrives at 4000
+
+        outcomes = arbiter.advance(4 * DEFAULT_MOVE_DELAY_MS)
+
+        statuses = {o.piece: o.status for o in outcomes}
+        assert statuses[first] is MoveOutcomeStatus.EXECUTED
+        assert statuses[second] is MoveOutcomeStatus.STOPPED_BY_FRIENDLY
+        assert board.get(Position(0, 4)) is first
+        assert board.get(Position(1, 4)) is second
+
+    def test_simultaneous_enemy_arrival_lets_the_later_scheduled_one_capture(self):
+        first = Piece('w', PieceKind.ROOK)
+        second = Piece('b', PieceKind.ROOK)
+        board = board_with(((0, 0), first), ((4, 4), second))
+        arbiter = make_arbiter(board)
+
+        arbiter.begin_move(first, Position(0, 0), Position(0, 4))    # arrives at 4000
+        arbiter.begin_move(second, Position(4, 4), Position(0, 4))   # arrives at 4000
+
+        outcomes = arbiter.advance(4 * DEFAULT_MOVE_DELAY_MS)
+
+        captured = {o.piece: o.captured_piece for o in outcomes}
+        assert captured[second] is first
+        assert board.get(Position(0, 4)) is second
+        assert first.state is PieceState.CAPTURED
+
+    def test_knight_blocked_by_friendly_stops_on_its_origin_square(self):
+        knight = Piece('w', PieceKind.KNIGHT)
+        friend = Piece('w', PieceKind.ROOK)
+        board = board_with(((4, 4), knight), ((6, 5), friend))
+        arbiter = make_arbiter(board)
+
+        arbiter.begin_move(knight, Position(4, 4), Position(6, 5))
+        outcomes = arbiter.advance(2 * DEFAULT_MOVE_DELAY_MS)
+
+        assert outcomes[0].status is MoveOutcomeStatus.STOPPED_BY_FRIENDLY
+        assert board.get(Position(4, 4)) is knight   # departure square, never left it
+        assert board.get(Position(6, 5)) is friend
+
+    def test_knight_lands_on_enemy_capturing_it(self):
+        knight = Piece('w', PieceKind.KNIGHT)
+        enemy = Piece('b', PieceKind.ROOK)
+        board = board_with(((4, 4), knight), ((6, 5), enemy))
+        arbiter = make_arbiter(board)
+
+        arbiter.begin_move(knight, Position(4, 4), Position(6, 5))
+        outcomes = arbiter.advance(2 * DEFAULT_MOVE_DELAY_MS)
+
+        assert outcomes[0].status is MoveOutcomeStatus.EXECUTED
+        assert outcomes[0].captured_piece is enemy
+        assert board.get(Position(6, 5)) is knight
 
 
 class TestPawnPromotion:

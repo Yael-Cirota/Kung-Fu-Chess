@@ -12,44 +12,35 @@ KNIGHT_OFFSETS = [(2, 1), (2, -1), (-2, 1), (-2, -1), (1, 2), (1, -2), (-1, 2), 
 KING_OFFSETS = QUEEN_DIRECTIONS
 
 
-def _is_friendly(piece, occupant: Optional[object]) -> bool:
-    return occupant is not None and occupant.color == piece.color
-
-
 def _is_enemy(piece, occupant: Optional[object]) -> bool:
     return occupant is not None and occupant.color != piece.color
 
 
 def _slide(board: Board, piece, origin: Position, directions: Iterable[Tuple[int, int]]) -> Set[Position]:
-    """Walks each direction from origin until blocked, off-board, or a capture square is reached."""
+    """
+    Walks each direction from origin to the board edge, returning every
+    square in reach. Occupancy is deliberately ignored: legality is a
+    question of movement *pattern* only, so a slider may be commanded
+    toward an occupied square - any collision is resolved dynamically
+    while the piece is in flight, never blocked at the input phase.
+    """
     destinations: Set[Position] = set()
     for dr, dc in directions:
         row, col = origin.row + dr, origin.col + dc
-        while True:
-            pos = Position(row, col)
-            if not board.is_within_bounds(pos):
-                break
-            occupant = board.get(pos)
-            if _is_friendly(piece, occupant):
-                break
-            destinations.add(pos)
-            if occupant is not None:
-                break
+        while board.is_within_bounds(Position(row, col)):
+            destinations.add(Position(row, col))
             row += dr
             col += dc
     return destinations
 
 
 def _step(board: Board, piece, origin: Position, offsets: Iterable[Tuple[int, int]]) -> Set[Position]:
-    """Checks each fixed offset from origin, ignoring anything in between."""
+    """Every in-bounds offset from origin, ignoring occupancy (see _slide)."""
     destinations: Set[Position] = set()
     for dr, dc in offsets:
         pos = Position(origin.row + dr, origin.col + dc)
-        if not board.is_within_bounds(pos):
-            continue
-        if _is_friendly(piece, board.get(pos)):
-            continue
-        destinations.add(pos)
+        if board.is_within_bounds(pos):
+            destinations.add(pos)
     return destinations
 
 

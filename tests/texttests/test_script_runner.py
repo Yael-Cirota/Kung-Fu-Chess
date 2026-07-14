@@ -64,7 +64,9 @@ class TestScriptRunnerRun:
 
         output = ScriptRunner().run(vpl_input)
 
-        assert output == "wR . .\n. . wR\n"
+        # The rook slides one square per second, so after the first wait it
+        # is mid-flight on the middle square, then reaches the far square.
+        assert output == ". wR .\n. . wR\n"
 
     def test_jump_command_requests_a_move_back_to_the_same_square(self):
         # A same-square move never mutates the board, so a broken (no-op)

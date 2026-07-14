@@ -20,11 +20,15 @@ DEFAULT_RULES: Dict[PieceKind, Type[PieceRule]] = {
 
 class RuleEngine:
     """
-    Answers exactly one question: given a source cell and a destination
-    cell, is this move command legal right now? Read-only with respect
-    to the board - never moves pieces, removes captures, or otherwise
-    mutates game state. Delegates destination geometry to a per-kind
-    rule, injected at construction (defaults to kfchess.rules.piece_rules).
+    Answers exactly one question: does this command match the piece's
+    movement *pattern*? Read-only with respect to the board - never moves
+    pieces, removes captures, or otherwise mutates game state. Delegates
+    destination geometry to a per-kind rule, injected at construction
+    (defaults to kfchess.rules.piece_rules). Occupancy along the path and
+    on the destination is deliberately *not* checked here: collisions are
+    resolved dynamically by RealTimeArbiter during the move, so nothing is
+    blocked at the input phase (pawns are the one exception - their
+    forward/diagonal split is occupancy-dependent by nature).
 
     Out of scope by design: check, pins, checkmate, castling, en
     passant, and game-over handling. The only win condition (capturing
@@ -46,10 +50,6 @@ class RuleEngine:
 
         if from_pos == to_pos:
             return MoveValidation.ok()
-
-        target = board.get(to_pos)
-        if target is not None and target.color == piece.color:
-            return MoveValidation.invalid(MoveRejectionReason.FRIENDLY_DESTINATION)
 
         rule = self._rules[piece.kind]
         if to_pos in rule.legal_destinations(board, piece):

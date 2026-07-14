@@ -89,15 +89,20 @@ class TestRequestMoveRejections:
 
         assert result.reason == MoveRejectionReason.OUTSIDE_BOARD
 
-    def test_friendly_fire_returns_reason(self):
+    def test_friendly_destination_is_accepted_and_resolved_dynamically(self):
+        # No longer blocked at the input phase: the command is accepted and
+        # the rook stops one square short of the friendly piece in flight.
         rook = Piece('w', PieceKind.ROOK)
         friend = Piece('w', PieceKind.PAWN)
         board = board_with(((0, 0), rook), ((0, 7), friend))
         engine = make_engine(board)
 
         result = engine.request_move(Position(0, 0), Position(0, 7))
+        assert result.is_accepted is True
 
-        assert result.reason == MoveRejectionReason.FRIENDLY_DESTINATION
+        engine.wait(7 * DEFAULT_MOVE_DELAY_MS)
+        assert board.get(Position(0, 6)) is rook
+        assert board.get(Position(0, 7)) is friend
 
 
 class TestClock:
@@ -143,24 +148,26 @@ class TestGameOver:
         board = board_with(((0, 0), attacker), ((0, 1), king), ((2, 2), bystander))
         engine = make_engine(board)
 
-        engine.request_move(Position(2, 2), Position(5, 5))  # matures at 3000
-        engine.request_move(Position(0, 0), Position(0, 1))  # matures at 1000, captures king
+        engine.request_move(Position(2, 2), Position(5, 5))  # slides, first step at 1000
+        engine.request_move(Position(0, 0), Position(0, 1))  # arrives at 1000, captures king
 
         engine.wait(DEFAULT_MOVE_DELAY_MS)
         assert engine.game_over is True
 
+        # Game over cancels the bystander's remaining steps: it froze on the
+        # one square it had already advanced to and never reaches (5, 5).
         engine.wait(2 * DEFAULT_MOVE_DELAY_MS)
-        assert board.get(Position(2, 2)) is bystander
+        assert board.get(Position(3, 3)) is bystander
         assert board.get(Position(5, 5)) is None
 
-    def test_aborted_move_does_not_set_game_over(self):
+    def test_non_capturing_stop_does_not_set_game_over(self):
         king = Piece('w', PieceKind.KING)
         friend = Piece('w', PieceKind.PAWN)
         board = board_with(((0, 0), king))
         engine = make_engine(board)
 
         engine.request_move(Position(0, 0), Position(0, 1))
-        board.set(Position(0, 1), friend)  # friendly piece appears before arrival, aborting the move
+        board.set(Position(0, 1), friend)  # friendly piece appears first; king stops on its preceding square
 
         engine.wait(DEFAULT_MOVE_DELAY_MS)
 

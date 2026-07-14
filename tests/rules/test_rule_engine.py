@@ -53,21 +53,25 @@ class TestRuleEngineValidate:
         assert result.is_valid is False
         assert result.reason == MoveRejectionReason.ILLEGAL_PIECE_MOVE
 
-    def test_blocked_path_is_reported_as_illegal_piece_move(self):
+    def test_blocked_path_is_legal_because_occupancy_is_resolved_dynamically(self):
+        # A blocker in the way no longer rejects the command at the input
+        # phase; the collision is resolved while the piece is in flight.
         rook = Piece('w', PieceKind.ROOK)
         blocker = Piece('b', PieceKind.PAWN)
         board = board_with(((4, 0), rook), ((4, 3), blocker))
         result = self.engine.validate(board, Position(4, 0), Position(4, 7))
-        assert result.is_valid is False
-        assert result.reason == MoveRejectionReason.ILLEGAL_PIECE_MOVE
+        assert result.is_valid is True
+        assert result.reason == "ok"
 
-    def test_friendly_destination(self):
+    def test_friendly_destination_is_legal_at_the_input_phase(self):
+        # Commanding a slider toward a friendly-occupied square is allowed;
+        # it will stop one square short dynamically, not be blocked here.
         rook = Piece('w', PieceKind.ROOK)
         friend = Piece('w', PieceKind.PAWN)
         board = board_with(((0, 0), rook), ((0, 7), friend))
         result = self.engine.validate(board, Position(0, 0), Position(0, 7))
-        assert result.is_valid is False
-        assert result.reason == MoveRejectionReason.FRIENDLY_DESTINATION
+        assert result.is_valid is True
+        assert result.reason == "ok"
 
     def test_legal_move_is_ok(self):
         rook = Piece('w', PieceKind.ROOK)

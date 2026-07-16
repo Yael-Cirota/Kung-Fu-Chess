@@ -14,7 +14,7 @@ class TestCellCenterPx:
 
 
 class FakeWindowCv2:
-    """Stands in for cv2 inside ui.graphics.window so main(show_window=True) never touches a real display."""
+    """Stands in for cv2 inside ui.graphics.img_canvas so main(show_window=True) never touches a real display."""
 
     def __init__(self):
         self.destroy_window_calls = []
@@ -24,6 +24,10 @@ class FakeWindowCv2:
 
     def waitKey(self, delay_ms):
         return ord("a")  # never the quit key
+
+    def imwrite(self, path, array):
+        import cv2  # real cv2, so the demo's output files still land on disk
+        return cv2.imwrite(path, array)
 
     def destroyWindow(self, title):
         self.destroy_window_calls.append(title)
@@ -43,14 +47,14 @@ class TestMain:
         assert len(list(frames_dir.glob("*.png"))) > 0
 
     def test_runs_with_a_window_and_closes_it_when_done(self, tmp_path, monkeypatch):
-        import ui.graphics.window as window_module
+        import ui.graphics.img_canvas as img_canvas_module
 
         frames_dir = tmp_path / "frames"
         board_path = tmp_path / "rendered_board.png"
         monkeypatch.setattr(main_module, "ANIMATION_FRAMES_OUTPUT_DIR", frames_dir)
         monkeypatch.setattr(main_module, "RENDERED_BOARD_OUTPUT_PATH", board_path)
         fake_cv2 = FakeWindowCv2()
-        monkeypatch.setattr(window_module, "cv2", fake_cv2)
+        monkeypatch.setattr(img_canvas_module, "cv2", fake_cv2)
 
         main(show_window=True)
 

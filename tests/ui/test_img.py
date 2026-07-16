@@ -114,6 +114,25 @@ class TestDrawOn:
 
         assert frame.img.shape[2] == 4
 
+    def test_does_not_mutate_the_source_sprite_when_channels_mismatch(self):
+        # Regression test for the cached-sprite corruption bug: blitting a
+        # 4-channel sprite onto a 3-channel frame must reconcile channels on
+        # a local copy, never on the sprite's own (cached, reused) image.
+        frame = Img()
+        frame.img = solid_bgr(4, 4, (0, 0, 0))
+        sprite = Img()
+        sprite.img = solid_bgra(4, 4, (255, 255, 255), alpha=128)
+
+        sprite.draw_on(frame, 0, 0)
+
+        assert sprite.img.shape[2] == 4  # still 4-channel; alpha not stripped
+        # And a second blit onto a 4-channel frame still alpha-blends,
+        # proving the sprite's transparency survived the first draw.
+        frame2 = Img()
+        frame2.img = solid_bgra(4, 4, (0, 0, 0), alpha=255)
+        sprite.draw_on(frame2, 0, 0)
+        assert all(120 <= channel <= 135 for channel in frame2.img[0, 0][:3])
+
     def test_raises_when_frame_not_loaded(self):
         sprite = Img()
         sprite.img = solid_bgr(2, 2, (0, 0, 0))

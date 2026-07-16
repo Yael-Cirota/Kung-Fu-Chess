@@ -2,43 +2,42 @@
 Drives the graphics demo: steps the simulation and captures frames.
 
 Splits the concerns the demo used to cram into one function:
-  - FrameWriter owns writing rendered frames to disk (the only place the
-    demo touches cv2 for output, keeping cv2 out of ui.main).
+  - FrameWriter owns writing rendered frames to disk, delegating the actual
+    write to the injected Canvas so cv2 stays out of the demo entirely.
   - run_move_and_capture owns the settle-loop control flow and delegates
     rendering, disk-writing, live display, and reporting to its collaborators.
 """
-
-import cv2
 
 from ui.app import build_visual_states
 
 
 class FrameWriter:
-    """Sequentially numbered on-disk sink for rendered frames - the one place the demo writes frame images."""
+    """Sequentially numbered on-disk sink for rendered frames - writes each through the Canvas."""
 
-    def __init__(self, output_dir):
+    def __init__(self, canvas, output_dir):
+        self._canvas = canvas
         self._output_dir = output_dir
         self.frames_written = 0
 
     def write(self, rendered) -> None:
         path = self._output_dir / f"{self.frames_written:04d}.png"
-        cv2.imwrite(str(path), rendered.img)
+        self._canvas.save(rendered, path)
         self.frames_written += 1
 
 
-def write_image(path, rendered) -> None:
+def write_image(canvas, path, rendered) -> None:
     """Writes a single rendered image to `path` (the demo's final still-board export)."""
-    cv2.imwrite(str(path), rendered.img)
+    canvas.save(rendered, path)
 
 
 def run_move_and_capture(
     game_controller, animator, renderer, frame_writer, piece_id, label, cell_size_px,
-    window=None, tick_ms=40, reporter=print,
+    live_canvas=None, tick_ms=40, reporter=print,
 ):
     """
     Steps simulated time forward in small ticks - rendering, saving (via
-    `frame_writer`), and (if a Window was supplied) live-displaying a frame
-    each tick - until the piece identified by `piece_id` (whose move was
+    `frame_writer`), and (if a `live_canvas` was supplied) live-displaying a
+    frame each tick - until the piece identified by `piece_id` (whose move was
     already requested via the controller's clicks) has finished moving and
     settled back into an idle-bound rest animation. Reports pixel position
     and animation state/frame each tick through `reporter` so the glide can
@@ -62,8 +61,8 @@ def run_move_and_capture(
         rendered = renderer.render(game_controller.board_snapshot(), visual_states)
         frame_writer.write(rendered)
 
-        if window is not None:
-            if not window.show(rendered, delay_ms=tick_ms):
+        if live_canvas is not None:
+            if not live_canvas.show(rendered, delay_ms=tick_ms):
                 return
 
         if game_controller.motion_for(piece_id) is None:

@@ -127,3 +127,16 @@ class TestScriptParser:
         script = ScriptParser().parse(vpl_input)
 
         assert script.commands == [PrintBoardCommand()]
+
+    def test_unparseable_command_lines_are_dropped(self):
+        vpl_input = (
+            "Board:\n"
+            "wK .\n"
+            "Commands:\n"
+            "not a real command\n"
+            "print board"
+        )
+
+        script = ScriptParser().parse(vpl_input)
+
+        assert script.commands == [PrintBoardCommand()]

@@ -57,13 +57,21 @@ class Img:
         if self.img is None or other_img.img is None:
             raise ValueError("Both images must be loaded before drawing.")
 
-        if self.img.shape[2] != other_img.img.shape[2]:
-            if self.img.shape[2] == 3 and other_img.img.shape[2] == 4:
-                self.img = cv2.cvtColor(self.img, cv2.COLOR_BGR2BGRA)
-            elif self.img.shape[2] == 4 and other_img.img.shape[2] == 3:
-                self.img = cv2.cvtColor(self.img, cv2.COLOR_BGRA2BGR)
+        # Reconcile channel counts on a *local* copy. cv2.cvtColor returns a
+        # new array, so self.img is never reassigned or mutated here. This
+        # matters because SpriteLoader caches Img instances and reuses them
+        # across frames: the previous version reassigned self.img, which
+        # permanently corrupted a cached sprite's alpha the first time it was
+        # blitted onto a differently-shaped background (e.g. a 4-channel
+        # sprite onto a 3-channel frame).
+        src = self.img
+        if src.shape[2] != other_img.img.shape[2]:
+            if src.shape[2] == 3 and other_img.img.shape[2] == 4:
+                src = cv2.cvtColor(src, cv2.COLOR_BGR2BGRA)
+            elif src.shape[2] == 4 and other_img.img.shape[2] == 3:
+                src = cv2.cvtColor(src, cv2.COLOR_BGRA2BGR)
 
-        h, w = self.img.shape[:2]
+        h, w = src.shape[:2]
         H, W = other_img.img.shape[:2]
 
         if y + h > H or x + w > W:
@@ -71,13 +79,13 @@ class Img:
 
         roi = other_img.img[y:y + h, x:x + w]
 
-        if self.img.shape[2] == 4:
-            b, g, r, a = cv2.split(self.img)
+        if src.shape[2] == 4:
+            b, g, r, a = cv2.split(src)
             mask = a / 255.0
             for c in range(3):
-                roi[..., c] = (1 - mask) * roi[..., c] + mask * self.img[..., c]
+                roi[..., c] = (1 - mask) * roi[..., c] + mask * src[..., c]
         else:
-            other_img.img[y:y + h, x:x + w] = self.img
+            other_img.img[y:y + h, x:x + w] = src
 
     def put_text(self, txt, x, y, font_size, color=(255, 255, 255, 255), thickness=1):
         if self.img is None:

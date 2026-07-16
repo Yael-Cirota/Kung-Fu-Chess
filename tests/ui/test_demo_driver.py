@@ -1,8 +1,7 @@
 from pathlib import Path
 
-import ui.demo_driver as demo_driver_module
 from kfchess.api import BoardSnapshot, MotionInfo, PieceView, Position
-from ui.demo_driver import FrameWriter, run_move_and_capture
+from ui.demo_driver import FrameWriter, run_move_and_capture, write_image
 from ui.ui_config import CELL_SIZE_PX
 
 
@@ -46,6 +45,22 @@ class FakeRenderer:
         return FakeRendered()
 
 
+class FakeCanvas:
+    """Records save() and show() calls - stands in for ImgCanvas without cv2."""
+
+    def __init__(self, show_results=None):
+        self.saves = []
+        self.shows = []
+        self._show_results = list(show_results or [])
+
+    def save(self, frame, path):
+        self.saves.append((frame, path))
+
+    def show(self, frame, delay_ms):
+        self.shows.append((frame, delay_ms))
+        return self._show_results.pop(0)
+
+
 class FakeFrameWriter:
     def __init__(self):
         self.writes = 0
@@ -54,41 +69,31 @@ class FakeFrameWriter:
         self.writes += 1
 
 
-class FakeWindow:
-    def __init__(self, show_results):
-        self.calls = []
-        self._results = list(show_results)
-
-    def show(self, frame, delay_ms):
-        self.calls.append((frame, delay_ms))
-        return self._results.pop(0)
-
-
 def silent(*_args, **_kwargs):
     pass
 
 
-class FakeCv2:
-    def __init__(self):
-        self.imwrite_calls = []
-
-    def imwrite(self, path, img):
-        self.imwrite_calls.append((path, img))
-        return True
-
-
 class TestFrameWriter:
-    def test_writes_sequentially_numbered_frames_to_the_output_dir(self, monkeypatch):
-        fake_cv2 = FakeCv2()
-        monkeypatch.setattr(demo_driver_module, "cv2", fake_cv2)
-        writer = FrameWriter(Path("frames"))
+    def test_writes_sequentially_numbered_frames_through_the_canvas(self):
+        canvas = FakeCanvas()
+        writer = FrameWriter(canvas, Path("frames"))
 
         writer.write(FakeRendered())
         writer.write(FakeRendered())
 
         assert writer.frames_written == 2
-        assert fake_cv2.imwrite_calls[0][0] == str(Path("frames") / "0000.png")
-        assert fake_cv2.imwrite_calls[1][0] == str(Path("frames") / "0001.png")
+        assert canvas.saves[0][1] == Path("frames") / "0000.png"
+        assert canvas.saves[1][1] == Path("frames") / "0001.png"
+
+
+class TestWriteImage:
+    def test_saves_a_single_frame_to_the_given_path_through_the_canvas(self):
+        canvas = FakeCanvas()
+        rendered = FakeRendered()
+
+        write_image(canvas, Path("out.png"), rendered)
+
+        assert canvas.saves == [(rendered, Path("out.png"))]
 
 
 class TestRunMoveAndCapture:
@@ -120,19 +125,19 @@ class TestRunMoveAndCapture:
         assert renderer.render_calls == 11
         assert frame_writer.writes == 11
 
-    def test_stops_early_when_window_reports_quit(self):
+    def test_stops_early_when_live_canvas_reports_quit(self):
         motion = MotionInfo(from_pos=Position(4, 0), to_pos=Position(4, 2), start_ms=0, duration_ms=100_000, is_jump=False)
         controller = FakeGameController(moving_until_ms=1_000_000, motion=motion)  # never settles on its own
         renderer = FakeRenderer()
         frame_writer = FakeFrameWriter()
-        window = FakeWindow(show_results=[False])
+        live_canvas = FakeCanvas(show_results=[False])
 
         run_move_and_capture(
             controller, FakeAnimator(), renderer, frame_writer, piece_id=1,
-            label="label", cell_size_px=CELL_SIZE_PX, window=window, tick_ms=40, reporter=silent,
+            label="label", cell_size_px=CELL_SIZE_PX, live_canvas=live_canvas, tick_ms=40, reporter=silent,
         )
 
-        assert len(window.calls) == 1
-        assert window.calls[0][1] == 40  # delay_ms == tick_ms
+        assert len(live_canvas.shows) == 1
+        assert live_canvas.shows[0][1] == 40  # delay_ms == tick_ms
         assert renderer.render_calls == 1
         assert frame_writer.writes == 1

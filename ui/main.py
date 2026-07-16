@@ -16,7 +16,7 @@ from ui.animation.piece_animator import PieceAnimator
 from ui.graphics.sprite_resolver import SpriteResolver
 from ui.graphics.sprite_loader import SpriteLoader
 from ui.graphics.renderer import BoardRenderer
-from ui.graphics.window import Window
+from ui.graphics.img_canvas import ImgCanvas
 from ui.app import build_visual_states
 from ui.demo_driver import FrameWriter, run_move_and_capture, write_image
 
@@ -51,13 +51,14 @@ def main(show_window: bool = True) -> None:
     game_controller = build_game_controller(session, cell_size_px=CELL_SIZE_PX)
     animator = PieceAnimator(load_animation_configs(PIECES_DIR))
 
+    canvas = ImgCanvas("Kung-Fu-Chess - Stage 4 motion demo")
     resolver = SpriteResolver(PIECES_DIR, SPRITE_STATE, SPRITE_FRAME_FILENAME)
-    sprite_loader = SpriteLoader(resolver, sprite_size_px=(CELL_SIZE_PX, CELL_SIZE_PX))
-    renderer = BoardRenderer(sprite_loader, BOARD_IMAGE_PATH, CELL_SIZE_PX)
-    window = Window("Kung-Fu-Chess - Stage 4 motion demo") if show_window else None
+    sprite_loader = SpriteLoader(canvas, resolver, sprite_size_px=(CELL_SIZE_PX, CELL_SIZE_PX))
+    renderer = BoardRenderer(canvas, sprite_loader, BOARD_IMAGE_PATH, CELL_SIZE_PX)
+    live_canvas = canvas if show_window else None
 
     ANIMATION_FRAMES_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    frame_writer = FrameWriter(ANIMATION_FRAMES_OUTPUT_DIR)
+    frame_writer = FrameWriter(canvas, ANIMATION_FRAMES_OUTPUT_DIR)
 
     print("Starting board:")
     print_board(game_controller)
@@ -71,7 +72,7 @@ def main(show_window: bool = True) -> None:
         game_controller.on_click(dest_x, dest_y)
         run_move_and_capture(
             game_controller, animator, renderer, frame_writer, pawn.piece_id,
-            "pawn slide (2 cells)", CELL_SIZE_PX, window,
+            "pawn slide (2 cells)", CELL_SIZE_PX, live_canvas,
         )
 
         print("\nBoard after the pawn's opening move:")
@@ -86,20 +87,19 @@ def main(show_window: bool = True) -> None:
         game_controller.on_click(dest_x, dest_y)
         run_move_and_capture(
             game_controller, animator, renderer, frame_writer, knight.piece_id,
-            "knight jump", CELL_SIZE_PX, window,
+            "knight jump", CELL_SIZE_PX, live_canvas,
         )
 
         print("\nBoard after the knight's opening move:")
         print_board(game_controller)
     finally:
-        if window is not None:
-            window.close()
+        canvas.close()
 
     rendered = renderer.render(
         game_controller.board_snapshot(),
         build_visual_states(game_controller, animator, game_controller.clock_ms, CELL_SIZE_PX),
     )
-    write_image(RENDERED_BOARD_OUTPUT_PATH, rendered)
+    write_image(canvas, RENDERED_BOARD_OUTPUT_PATH, rendered)
     print(f"\nRendered board image saved to: {RENDERED_BOARD_OUTPUT_PATH}")
     print(f"Per-tick animation frames saved under: {ANIMATION_FRAMES_OUTPUT_DIR} ({frame_writer.frames_written} frames)")
 

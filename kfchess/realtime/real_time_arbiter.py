@@ -71,27 +71,38 @@ class RealTimeArbiter:
 
     def begin_move(self, piece, from_pos: Position, to_pos: Position) -> None:
         self._next_seq += 1
+        started_at_ms = self._clock_ms
 
         if from_pos == to_pos:
             motion = Motion(
                 piece=piece, origin=from_pos, current=from_pos, remaining=[],
                 next_step_at=self._clock_ms + JUMP_DURATION_MS,
                 step_duration_ms=JUMP_DURATION_MS, is_jump=True, seq=self._next_seq,
+                started_at_ms=started_at_ms, total_duration_ms=JUMP_DURATION_MS,
             )
             self._airborne.add(piece)
         else:
             profile = self._movement_profiles[piece.kind]
             step_duration = profile.step_duration_ms(from_pos, to_pos)
+            path = profile.occupied_path(from_pos, to_pos)
             motion = Motion(
                 piece=piece, origin=from_pos, current=from_pos,
-                remaining=profile.occupied_path(from_pos, to_pos),
+                remaining=path,
                 next_step_at=self._clock_ms + step_duration,
                 step_duration_ms=step_duration, is_jump=False, seq=self._next_seq,
+                started_at_ms=started_at_ms, total_duration_ms=step_duration * len(path),
             )
 
         self._pending.append(motion)
         self._moving.add(piece)
         piece.state = PieceState.MOVING
+
+    def motion_for(self, piece) -> Optional[Motion]:
+        """Read-only lookup of the in-flight Motion for `piece`, or None if it isn't moving."""
+        for motion in self._pending:
+            if motion.piece is piece:
+                return motion
+        return None
 
     def advance(self, ms: int) -> List[MoveOutcome]:
         self._clock_ms += ms

@@ -48,6 +48,14 @@ class GameEngine:
     def is_within_bounds(self, pos: Position) -> bool:
         return self._board.is_within_bounds(pos)
 
+    def board_grid(self):
+        """Row-by-row read access to board occupancy, e.g. for kfchess.api to build a BoardSnapshot."""
+        return self._board.as_grid()
+
+    def motion_for(self, piece):
+        """Read-only lookup of the in-flight Motion for `piece`, or None if it isn't moving."""
+        return self._arbiter.motion_for(piece)
+
     def request_move(self, from_pos: Position, to_pos: Position) -> MoveResult:
         if self.game_over:
             return MoveResult.rejected(MoveRejectionReason.GAME_OVER)

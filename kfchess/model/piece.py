@@ -1,7 +1,10 @@
+import itertools
 from enum import Enum
 from typing import Optional
 
 from kfchess.model.position import Position
+
+_id_counter = itertools.count(1)
 
 class Color(str, Enum):
     WHITE = 'w'
@@ -31,6 +34,7 @@ class Piece:
     and active-motion tracking live entirely in kfchess.realtime.
     """
     def __init__(self, color: str, kind: PieceKind, cell: Optional[Position] = None):
+        self.piece_id = next(_id_counter)
         self.color = Color(color)
         self.kind = kind
         self.cell = cell           # type: Position | None

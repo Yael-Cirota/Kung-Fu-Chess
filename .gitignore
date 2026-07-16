@@ -10,3 +10,15 @@ htmlcov/
 .nyc_output/
 .tox/
 .coverage
+.coveragerc
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+ui/frames/
+ui/rendered_board.png
+
+# Claude Code local plan files
+.claude/plans/

@@ -49,6 +49,9 @@ class FakeController:
     def motion_for(self, piece_id):
         return None
 
+    def move_log(self):
+        return []
+
 
 class FakeAnimator:
     def update(self, piece_id, is_moving, is_jump, now_ms):
@@ -59,7 +62,7 @@ class FakeRenderer:
     def __init__(self):
         self.render_calls = 0
 
-    def render(self, board_snapshot, visual_states):
+    def render(self, board_snapshot, visual_states, move_log=None):
         self.render_calls += 1
         return object()
 

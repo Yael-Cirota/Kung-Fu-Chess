@@ -46,6 +46,9 @@ class FakeSession:
     def motion_for(self, piece_id):
         return self._motions.get(piece_id)
 
+    def move_log(self):
+        return [(f, t) for f, t in self.request_move_calls]
+
 
 def make_controller(session):
     return GameController(session, BoardMapper())
@@ -177,3 +180,13 @@ class TestPassthroughs:
 
         assert controller.motion_for(1) is motion
         assert controller.motion_for(2) is None
+
+    def test_move_log_delegates_to_session(self):
+        rook = piece_view(1, "wR", row=4, col=0)
+        session = FakeSession({Position(4, 0): rook})
+        controller = make_controller(session)
+
+        controller.on_click(50, 450)   # select rook at (4,0)
+        controller.on_click(750, 450)  # move to (4,7)
+
+        assert controller.move_log() == [(Position(4, 0), Position(4, 7))]

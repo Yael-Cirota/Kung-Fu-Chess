@@ -20,19 +20,31 @@ class BoardRenderer:
     exactly as in Stage 2/3.
     """
 
-    def __init__(self, canvas: Canvas, sprite_loader: SpriteLoader, board_image_path: Path, cell_size_px: int):
+    def __init__(self, canvas: Canvas, sprite_loader: SpriteLoader, board_image_path: Path, cell_size_px: int,
+                 move_log_panel=None):
         self._canvas = canvas
         self._sprite_loader = sprite_loader
         self._board_image_path = Path(board_image_path)
         self._cell_size_px = cell_size_px
+        self._move_log_panel = move_log_panel
 
-    def render(self, board_snapshot, visual_states: Optional[Dict[int, PieceVisualState]] = None) -> ImageHandle:
+    def render(self, board_snapshot, visual_states: Optional[Dict[int, PieceVisualState]] = None,
+               move_log=None) -> ImageHandle:
         rows, cols = board_snapshot.rows, board_snapshot.cols
         visual_states = visual_states or {}
+        board_w = cols * self._cell_size_px
+        board_h = rows * self._cell_size_px
 
-        frame = self._canvas.load_image(
-            self._board_image_path, size=(cols * self._cell_size_px, rows * self._cell_size_px)
-        )
+        board_image = self._canvas.load_image(self._board_image_path, size=(board_w, board_h))
+        if move_log is None:
+            # Board-only frame: no panel, unchanged from before (also the demo path).
+            frame = board_image
+        else:
+            # Compose the board (kept at the origin) plus a right-hand log panel.
+            frame = self._canvas.blank(
+                (board_w + self._move_log_panel.width_px, board_h), self._move_log_panel.bg_color
+            )
+            self._canvas.blit(frame, board_image, 0, 0)
 
         for piece_view in board_snapshot.pieces():
             visual = visual_states.get(piece_view.piece_id)
@@ -45,5 +57,8 @@ class BoardRenderer:
                 sprite = self._sprite_loader.get(piece_view.symbol)
 
             self._canvas.blit(frame, sprite, pixel_x, pixel_y)
+
+        if move_log is not None:
+            self._move_log_panel.draw(self._canvas, frame, move_log, board_w, board_h, rows)
 
         return frame

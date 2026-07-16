@@ -10,12 +10,16 @@ from controller.factory import build_game_controller
 from ui.ui_config import (
     CELL_SIZE_PX, BOARD_IMAGE_PATH, PIECES_DIR, SPRITE_STATE, SPRITE_FRAME_FILENAME,
     RENDERED_BOARD_OUTPUT_PATH, ANIMATION_FRAMES_OUTPUT_DIR,
+    MOVE_LOG_PANEL_WIDTH_PX, MOVE_LOG_BG_COLOR, MOVE_LOG_HEADER_COLOR,
+    MOVE_LOG_WHITE_TEXT_COLOR, MOVE_LOG_BLACK_TEXT_COLOR, MOVE_LOG_FONT_SCALE,
+    MOVE_LOG_LINE_HEIGHT_PX, MOVE_LOG_HEADER_HEIGHT_PX, MOVE_LOG_PADDING_PX,
 )
 from ui.animation.animation_config_loader import load_animation_configs
 from ui.animation.piece_animator import PieceAnimator
 from ui.graphics.sprite_resolver import SpriteResolver
 from ui.graphics.sprite_loader import SpriteLoader
 from ui.graphics.renderer import BoardRenderer
+from ui.graphics.move_log_panel import MoveLogPanel
 from ui.graphics.img_canvas import ImgCanvas
 from ui.app import build_visual_states
 from ui.demo_driver import FrameWriter, run_move_and_capture, write_image
@@ -56,7 +60,14 @@ def _build_scene(window_title: str):
     canvas = ImgCanvas(window_title)
     resolver = SpriteResolver(PIECES_DIR, SPRITE_STATE, SPRITE_FRAME_FILENAME)
     sprite_loader = SpriteLoader(canvas, resolver, sprite_size_px=(CELL_SIZE_PX, CELL_SIZE_PX))
-    renderer = BoardRenderer(canvas, sprite_loader, BOARD_IMAGE_PATH, CELL_SIZE_PX)
+    move_log_panel = MoveLogPanel(
+        width_px=MOVE_LOG_PANEL_WIDTH_PX, bg_color=MOVE_LOG_BG_COLOR,
+        header_color=MOVE_LOG_HEADER_COLOR, white_text_color=MOVE_LOG_WHITE_TEXT_COLOR,
+        black_text_color=MOVE_LOG_BLACK_TEXT_COLOR, font_scale=MOVE_LOG_FONT_SCALE,
+        line_height_px=MOVE_LOG_LINE_HEIGHT_PX, header_height_px=MOVE_LOG_HEADER_HEIGHT_PX,
+        padding_px=MOVE_LOG_PADDING_PX,
+    )
+    renderer = BoardRenderer(canvas, sprite_loader, BOARD_IMAGE_PATH, CELL_SIZE_PX, move_log_panel)
     return session, game_controller, animator, canvas, renderer
 
 

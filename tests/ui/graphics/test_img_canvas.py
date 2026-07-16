@@ -69,6 +69,32 @@ class TestLoadImage:
         assert handle.img.shape[:2] == (4, 4)
 
 
+class TestBlank:
+    def test_returns_a_solid_color_frame_of_the_requested_size(self):
+        canvas = ImgCanvas()
+
+        frame = canvas.blank((30, 20), (32, 32, 32))
+
+        assert isinstance(frame, Img)
+        assert frame.img.shape == (20, 30, 3)  # (height, width, channels)
+        assert (frame.img[0, 0] == (32, 32, 32)).all()
+        assert (frame.img[19, 29] == (32, 32, 32)).all()
+
+
+class TestDrawText:
+    def test_delegates_to_the_frame_put_text(self):
+        canvas = ImgCanvas()
+        recorded = []
+
+        class FakeFrame:
+            def put_text(self, txt, x, y, font_size, color, thickness):
+                recorded.append((txt, x, y, font_size, color, thickness))
+
+        canvas.draw_text(FakeFrame(), "White", 8, 30, 0.5, (240, 240, 240), thickness=2)
+
+        assert recorded == [("White", 8, 30, 0.5, (240, 240, 240), 2)]
+
+
 class TestBlit:
     def test_delegates_to_the_sprite_draw_on(self):
         canvas = ImgCanvas()

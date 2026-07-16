@@ -1,4 +1,5 @@
 import cv2
+import numpy as np
 
 from ui.img import Img
 
@@ -30,6 +31,17 @@ class ImgCanvas:
 
     def load_image(self, path, size=None, keep_aspect=False) -> Img:
         return Img().read(path, size=size, keep_aspect=keep_aspect)
+
+    def blank(self, size, color) -> Img:
+        """A solid-color BGR frame of `size` (width, height) - the move-log side panel's canvas."""
+        width, height = size
+        img = Img()
+        img.img = np.zeros((height, width, 3), dtype=np.uint8)
+        img.img[:, :] = color
+        return img
+
+    def draw_text(self, frame: Img, text, x, y, font_scale, color, thickness=1) -> None:
+        frame.put_text(text, x, y, font_scale, color=color, thickness=thickness)
 
     def blit(self, frame: Img, image: Img, x: int, y: int) -> None:
         image.draw_on(frame, x, y)

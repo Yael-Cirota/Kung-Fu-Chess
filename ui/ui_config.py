@@ -17,3 +17,17 @@ SPRITE_STATE = "idle"                    # which animation state supplies the st
 SPRITE_FRAME_FILENAME = "1.png"          # which frame of that state
 RENDERED_BOARD_OUTPUT_PATH = UI_DIR / "rendered_board.png"
 ANIMATION_FRAMES_OUTPUT_DIR = UI_DIR / "frames"
+
+# Move-log side panel (drawn to the right of the board so board pixels - and
+# therefore click-to-cell mapping - stay at the origin, unchanged). Colors are
+# BGR to match OpenCV. The panel splits into a White column and a Black column
+# so each player reads back only the moves they issued.
+MOVE_LOG_PANEL_WIDTH_PX = 280
+MOVE_LOG_BG_COLOR = (32, 32, 32)
+MOVE_LOG_HEADER_COLOR = (180, 180, 180)
+MOVE_LOG_WHITE_TEXT_COLOR = (240, 240, 240)
+MOVE_LOG_BLACK_TEXT_COLOR = (120, 200, 120)
+MOVE_LOG_FONT_SCALE = 0.5
+MOVE_LOG_LINE_HEIGHT_PX = 22
+MOVE_LOG_HEADER_HEIGHT_PX = 30
+MOVE_LOG_PADDING_PX = 12

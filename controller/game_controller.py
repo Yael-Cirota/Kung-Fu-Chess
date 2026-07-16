@@ -63,3 +63,6 @@ class GameController:
 
     def motion_for(self, piece_id: int) -> Optional[MotionInfo]:
         return self._session.motion_for(piece_id)
+
+    def move_log(self):
+        return self._session.move_log()

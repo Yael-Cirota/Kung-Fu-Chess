@@ -21,6 +21,14 @@ class FakeFrame:
         self.size = size
 
 
+class FakeBlankFrame:
+    """The opaque handle a FakeCanvas hands back for a composed (board + panel) frame."""
+
+    def __init__(self, size, color):
+        self.size = size
+        self.color = color
+
+
 class FakeCanvas:
     """
     Records load_image/blit calls instead of touching real pixels - the whole
@@ -31,12 +39,28 @@ class FakeCanvas:
 
     def __init__(self):
         self.blits = []  # (frame, sprite_handle, x, y)
+        self.blanks = []  # (size, color)
 
     def load_image(self, path, size=None, keep_aspect=False):
         return FakeFrame(Path(path), size)
 
+    def blank(self, size, color):
+        frame = FakeBlankFrame(size, color)
+        self.blanks.append(frame)
+        return frame
+
     def blit(self, frame, image, x, y):
         self.blits.append((frame, image, x, y))
+
+
+class FakeMoveLogPanel:
+    def __init__(self, width_px=120, bg_color=(9, 9, 9)):
+        self.width_px = width_px
+        self.bg_color = bg_color
+        self.draw_calls = []
+
+    def draw(self, canvas, frame, move_log, board_width_px, board_height_px, rows):
+        self.draw_calls.append((frame, move_log, board_width_px, board_height_px, rows))
 
 
 class FakeSpriteLoader:
@@ -124,3 +148,56 @@ class TestPieceWithVisualState:
         renderer.render(board, visual_states)
 
         assert ("wR", None, None) in loader.requests
+
+
+class TestMoveLogPanel:
+    def test_no_move_log_keeps_the_board_only_frame_and_skips_the_panel(self):
+        canvas = FakeCanvas()
+        panel = FakeMoveLogPanel()
+        board = snapshot(2, 2)
+        renderer = BoardRenderer(canvas, FakeSpriteLoader(), "/assets/board.png", 64, panel)
+
+        renderer.render(board)  # move_log defaults to None
+
+        assert canvas.blanks == []
+        assert panel.draw_calls == []
+
+    def test_with_move_log_composes_a_wide_frame_with_the_board_at_the_origin(self):
+        canvas = FakeCanvas()
+        panel = FakeMoveLogPanel(width_px=120, bg_color=(9, 9, 9))
+        board = snapshot(2, 2)
+        renderer = BoardRenderer(canvas, FakeSpriteLoader(), "/assets/board.png", 64, panel)
+
+        frame = renderer.render(board, move_log=[])
+
+        # 2x2 board at 64px = 128x128; panel adds 120px of width.
+        assert frame.size == (128 + 120, 128)
+        assert frame.color == (9, 9, 9)
+        # The board image is blitted onto the composed frame at the origin.
+        board_blit = canvas.blits[0]
+        assert board_blit[0] is frame and board_blit[2:] == (0, 0)
+
+    def test_delegates_to_the_panel_with_board_geometry(self):
+        canvas = FakeCanvas()
+        panel = FakeMoveLogPanel(width_px=120)
+        board = snapshot(2, 2)
+        renderer = BoardRenderer(canvas, FakeSpriteLoader(), "/assets/board.png", 64, panel)
+        log = ["entry"]
+
+        frame = renderer.render(board, move_log=log)
+
+        assert panel.draw_calls == [(frame, log, 128, 128, 2)]
+
+    def test_pieces_draw_at_board_coordinates_on_the_composed_frame(self):
+        canvas = FakeCanvas()
+        panel = FakeMoveLogPanel(width_px=120)
+        rook = make_piece_view(1, "wR", row=0, col=1)
+        board = snapshot(2, 2, rook)
+        renderer = BoardRenderer(canvas, FakeSpriteLoader(), "/assets/board.png", 64, panel)
+
+        renderer.render(board, move_log=[])
+
+        # First blit is the board background; the sprite blit follows at its grid cell.
+        sprite_blit = canvas.blits[1]
+        assert sprite_blit[1] == "sprite:wR"
+        assert sprite_blit[2:] == (64, 0)

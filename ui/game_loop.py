@@ -55,6 +55,8 @@ def run_game_loop(
             render_ms=render_ms,
             cell_size_px=cell_size_px,
         )
-        rendered = renderer.render(game_controller.board_snapshot(), visual_states)
+        rendered = renderer.render(
+            game_controller.board_snapshot(), visual_states, move_log=game_controller.move_log()
+        )
 
         running = canvas.show(rendered, delay_ms=frame_delay_ms)

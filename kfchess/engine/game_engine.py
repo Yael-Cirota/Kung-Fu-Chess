@@ -7,6 +7,7 @@ from kfchess.rules.rule_engine import RuleEngine
 from kfchess.realtime.real_time_arbiter import RealTimeArbiter
 from kfchess.realtime.motion import MoveOutcomeStatus
 from kfchess.engine.move_result import MoveResult
+from kfchess.engine.move_log import MoveRecord
 
 
 class GameEngine:
@@ -26,6 +27,7 @@ class GameEngine:
         self._rule_engine = rule_engine
         self._arbiter = arbiter
         self._state = GameState()
+        self._move_log: list[MoveRecord] = []
 
     @property
     def game_over(self) -> bool:
@@ -56,6 +58,10 @@ class GameEngine:
         """Read-only lookup of the in-flight Motion for `piece`, or None if it isn't moving."""
         return self._arbiter.motion_for(piece)
 
+    def move_log(self):
+        """Issued moves in the order they were accepted, e.g. for kfchess.api to build a per-color log."""
+        return list(self._move_log)
+
     def request_move(self, from_pos: Position, to_pos: Position) -> MoveResult:
         if self.game_over:
             return MoveResult.rejected(MoveRejectionReason.GAME_OVER)
@@ -72,6 +78,9 @@ class GameEngine:
             return MoveResult.rejected(validation.reason)
 
         self._arbiter.begin_move(piece, from_pos, to_pos)
+        self._move_log.append(
+            MoveRecord(piece.color.value, piece.get_symbol(), from_pos, to_pos)
+        )
         return MoveResult.accepted()
 
     def wait(self, ms: int) -> None:

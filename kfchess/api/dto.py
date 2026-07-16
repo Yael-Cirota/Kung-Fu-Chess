@@ -4,7 +4,7 @@ from typing import List
 from kfchess.model.position import Position
 from kfchess.engine.move_result import MoveResult
 
-__all__ = ["Position", "MoveResult", "PieceView", "BoardSnapshot", "MotionInfo"]
+__all__ = ["Position", "MoveResult", "PieceView", "BoardSnapshot", "MotionInfo", "MoveLogEntry"]
 
 
 @dataclass(frozen=True)
@@ -25,6 +25,17 @@ class BoardSnapshot:
 
     def pieces(self) -> List[PieceView]:
         return list(self.piece_views)
+
+
+@dataclass(frozen=True)
+class MoveLogEntry:
+    """One issued move handed across the kfchess.api boundary - `color` lets ui
+    file it under the player who made it, from_pos/to_pos + symbol let ui render
+    it in whatever notation it likes, without ever seeing a kfchess type."""
+    color: str
+    symbol: str
+    from_pos: Position
+    to_pos: Position
 
 
 @dataclass(frozen=True)

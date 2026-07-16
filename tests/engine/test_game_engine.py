@@ -105,6 +105,44 @@ class TestRequestMoveRejections:
         assert board.get(Position(0, 7)) is friend
 
 
+class TestMoveLog:
+    def test_empty_before_any_move(self):
+        engine = make_engine(board_with())
+        assert engine.move_log() == []
+
+    def test_accepted_move_records_color_symbol_and_endpoints(self):
+        knight = Piece('b', PieceKind.KNIGHT)
+        board = board_with(((0, 1), knight))
+        engine = make_engine(board)
+
+        engine.request_move(Position(0, 1), Position(2, 2))
+
+        log = engine.move_log()
+        assert len(log) == 1
+        record = log[0]
+        assert record.color == 'b'
+        assert record.symbol == 'bN'
+        assert record.from_pos == Position(0, 1)
+        assert record.to_pos == Position(2, 2)
+
+    def test_rejected_move_is_not_recorded(self):
+        rook = Piece('w', PieceKind.ROOK)
+        board = board_with(((4, 0), rook))
+        engine = make_engine(board)
+
+        engine.request_move(Position(4, 0), Position(3, 1))  # illegal diagonal
+        assert engine.move_log() == []
+
+    def test_returns_a_copy_so_callers_cannot_mutate_history(self):
+        rook = Piece('w', PieceKind.ROOK)
+        board = board_with(((4, 0), rook))
+        engine = make_engine(board)
+        engine.request_move(Position(4, 0), Position(4, 7))
+
+        engine.move_log().clear()
+        assert len(engine.move_log()) == 1
+
+
 class TestClock:
     def test_clock_ms_starts_at_zero(self):
         engine = make_engine(board_with())

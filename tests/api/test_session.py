@@ -2,6 +2,7 @@ from kfchess.api import (
     BoardSnapshot,
     GameSession,
     MotionInfo,
+    MoveLogEntry,
     PieceView,
     Position,
     create_game_session,
@@ -106,3 +107,26 @@ class TestMotionFor:
 
     def test_unknown_piece_id_has_no_motion(self):
         assert make_session().motion_for(9999) is None
+
+
+class TestMoveLog:
+    def test_empty_before_any_move(self):
+        assert make_session().move_log() == []
+
+    def test_accepted_move_is_logged_as_an_entry(self):
+        session = make_session()
+        session.request_move(Position(0, 0), Position(0, 2))
+
+        log = session.move_log()
+        assert len(log) == 1
+        entry = log[0]
+        assert isinstance(entry, MoveLogEntry)
+        assert entry.color == 'w'
+        assert entry.symbol == 'wR'
+        assert entry.from_pos == Position(0, 0)
+        assert entry.to_pos == Position(0, 2)
+
+    def test_rejected_move_is_not_logged(self):
+        session = make_session()
+        session.request_move(Position(0, 0), Position(1, 1))  # illegal rook diagonal
+        assert session.move_log() == []

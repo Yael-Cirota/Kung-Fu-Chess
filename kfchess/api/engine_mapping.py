@@ -8,7 +8,7 @@ hands the raw results here, so it stays a thin adapter with no knowledge of
 these engine internals.
 """
 
-from kfchess.api.dto import BoardSnapshot, MotionInfo, PieceView
+from kfchess.api.dto import BoardSnapshot, MotionInfo, MoveLogEntry, PieceView
 
 
 def piece_to_view(piece) -> PieceView:
@@ -27,6 +27,15 @@ def motion_to_info(motion) -> MotionInfo:
         start_ms=motion.started_at_ms,
         duration_ms=motion.total_duration_ms,
         is_jump=motion.is_jump,
+    )
+
+
+def move_record_to_entry(record) -> MoveLogEntry:
+    return MoveLogEntry(
+        color=record.color,
+        symbol=record.symbol,
+        from_pos=record.from_pos,
+        to_pos=record.to_pos,
     )
 
 

@@ -50,7 +50,13 @@ def run_move_and_capture(
     settle_ticks_remaining = 10  # keep capturing briefly after arrival to show the rest animation
     while True:
         game_controller.advance(tick_ms)
-        visual_states = build_visual_states(game_controller, animator, game_controller.clock_ms, cell_size_px)
+        # Deterministic capture path: both clocks collapse onto the engine
+        # clock so a headless run is fully reproducible (no wall time leaks in).
+        visual_states = build_visual_states(
+            game_controller, animator,
+            engine_ms=game_controller.clock_ms, render_ms=game_controller.clock_ms,
+            cell_size_px=cell_size_px,
+        )
 
         visual = visual_states.get(piece_id)
         reporter(

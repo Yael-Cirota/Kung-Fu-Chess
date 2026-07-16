@@ -1,5 +1,5 @@
 import ui.main as main_module
-from ui.main import cell_center_px, main
+from ui.main import cell_center_px, main, run_capture_demo
 from ui.ui_config import CELL_SIZE_PX
 
 
@@ -14,16 +14,25 @@ class TestCellCenterPx:
 
 
 class FakeWindowCv2:
-    """Stands in for cv2 inside ui.graphics.img_canvas so main(show_window=True) never touches a real display."""
+    """Stands in for cv2 inside ui.graphics.img_canvas so main/run_capture_demo never touch a real display."""
 
-    def __init__(self):
+    EVENT_LBUTTONDOWN = 1
+
+    def __init__(self, wait_key_return=ord("a")):
         self.destroy_window_calls = []
+        self._wait_key_return = wait_key_return
+
+    def namedWindow(self, title):
+        pass
+
+    def setMouseCallback(self, title, callback):
+        pass
 
     def imshow(self, title, array):
         pass
 
     def waitKey(self, delay_ms):
-        return ord("a")  # never the quit key
+        return self._wait_key_return
 
     def imwrite(self, path, array):
         import cv2  # real cv2, so the demo's output files still land on disk
@@ -34,13 +43,26 @@ class FakeWindowCv2:
 
 
 class TestMain:
+    def test_runs_the_interactive_loop_and_closes_the_window_on_quit(self, monkeypatch):
+        import ui.graphics.img_canvas as img_canvas_module
+
+        # waitKey returns 'q', so the first show() reports quit and the loop exits after one frame.
+        fake_cv2 = FakeWindowCv2(wait_key_return=ord("q"))
+        monkeypatch.setattr(img_canvas_module, "cv2", fake_cv2)
+
+        main()
+
+        assert fake_cv2.destroy_window_calls == ["Kung-Fu-Chess"]
+
+
+class TestRunCaptureDemo:
     def test_runs_full_demo_without_a_window_and_writes_output_files(self, tmp_path, monkeypatch):
         frames_dir = tmp_path / "frames"
         board_path = tmp_path / "rendered_board.png"
         monkeypatch.setattr(main_module, "ANIMATION_FRAMES_OUTPUT_DIR", frames_dir)
         monkeypatch.setattr(main_module, "RENDERED_BOARD_OUTPUT_PATH", board_path)
 
-        main(show_window=False)
+        run_capture_demo(show_window=False)
 
         assert board_path.exists()
         assert frames_dir.exists()
@@ -56,7 +78,7 @@ class TestMain:
         fake_cv2 = FakeWindowCv2()
         monkeypatch.setattr(img_canvas_module, "cv2", fake_cv2)
 
-        main(show_window=True)
+        run_capture_demo(show_window=True)
 
         assert board_path.exists()
         assert fake_cv2.destroy_window_calls == ["Kung-Fu-Chess - Stage 4 motion demo"]

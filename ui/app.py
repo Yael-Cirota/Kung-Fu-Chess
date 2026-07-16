@@ -12,7 +12,8 @@ def cell_top_left_px(cell, cell_size_px: int) -> Tuple[int, int]:
 
 
 def build_visual_states(
-    game_controller: GameController, animator: PieceAnimator, now_ms: int, cell_size_px: int,
+    game_controller: GameController, animator: PieceAnimator,
+    engine_ms: int, render_ms: int, cell_size_px: int,
 ) -> Dict[int, PieceVisualState]:
     """
     Per-frame glue: for every piece in the controller's board snapshot,
@@ -22,25 +23,39 @@ def build_visual_states(
     touches a kfchess type, even through controller. This is the only
     place that combines pixel geometry, motion queries, and animation
     state; none of the three collaborators know about each other.
+
+    The "two clocks" rule lives here, in the split between the two time
+    arguments:
+      - engine_ms drives *only* motion_predictor.progress, i.e. where along
+        the path a piece is drawn. Motion.start_ms/duration_ms are in the
+        engine's own clock basis, so position must be read against that same
+        clock - otherwise we could interpolate a piece past a collision the
+        engine hasn't resolved yet, rendering an outcome that never happened.
+      - render_ms drives *only* the animator, i.e. cosmetic sprite-frame
+        selection and the idle/rest state-machine pacing. Those run on the
+        wall clock so animations stay smooth and time-based even on frames
+        where the engine clock didn't advance.
+    The motion *signals* (is_moving/is_jump) stay engine-derived; only the
+    clip pacing is wall-based.
     """
     visual_states: Dict[int, PieceVisualState] = {}
 
     for piece_view in game_controller.board_snapshot().pieces():
         motion = game_controller.motion_for(piece_view.piece_id)
         if motion is not None:
-            t = motion_predictor.progress(motion.start_ms, motion.duration_ms, now_ms)
+            t = motion_predictor.progress(motion.start_ms, motion.duration_ms, engine_ms)
             pixel_x, pixel_y = motion_predictor.interpolate(
                 cell_top_left_px(motion.from_pos, cell_size_px),
                 cell_top_left_px(motion.to_pos, cell_size_px),
                 t,
             )
             sprite_state, frame_index = animator.update(
-                piece_view.piece_id, is_moving=True, is_jump=motion.is_jump, now_ms=now_ms
+                piece_view.piece_id, is_moving=True, is_jump=motion.is_jump, now_ms=render_ms
             )
         else:
             pixel_x, pixel_y = cell_top_left_px(piece_view.cell, cell_size_px)
             sprite_state, frame_index = animator.update(
-                piece_view.piece_id, is_moving=False, is_jump=False, now_ms=now_ms
+                piece_view.piece_id, is_moving=False, is_jump=False, now_ms=render_ms
             )
 
         visual_states[piece_view.piece_id] = PieceVisualState(pixel_x, pixel_y, sprite_state, frame_index)

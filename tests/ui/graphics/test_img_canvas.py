@@ -1,4 +1,4 @@
-1import numpy as np
+import numpy as np
 
 import ui.graphics.img_canvas as img_canvas_module
 from ui.graphics.img_canvas import ImgCanvas
@@ -6,11 +6,16 @@ from ui.img import Img
 
 
 class FakeCv2:
+    EVENT_LBUTTONDOWN = 1
+    EVENT_MOUSEMOVE = 0
+
     def __init__(self, wait_key_return=ord("a")):
         self.imshow_calls = []
         self.wait_key_calls = []
         self.imwrite_calls = []
         self.destroy_window_calls = []
+        self.named_window_calls = []
+        self.mouse_callbacks = {}
         self._wait_key_return = wait_key_return
 
     def imshow(self, title, array):
@@ -23,6 +28,16 @@ class FakeCv2:
     def imwrite(self, path, array):
         self.imwrite_calls.append((path, array))
         return True
+
+    def namedWindow(self, title):
+        self.named_window_calls.append(title)
+
+    def setMouseCallback(self, title, callback):
+        self.mouse_callbacks[title] = callback
+
+    def click(self, title, x, y):
+        """Simulates the user left-clicking at (x, y) - what OpenCV would fire during waitKey."""
+        self.mouse_callbacks[title](self.EVENT_LBUTTONDOWN, x, y, 0, None)
 
     def destroyWindow(self, title):
         self.destroy_window_calls.append(title)
@@ -123,6 +138,53 @@ class TestSave:
         canvas.save(frame, "out.png")
 
         assert fake_cv2.imwrite_calls == [("out.png", frame.img)]
+
+
+class TestInput:
+    def test_creates_the_window_and_wires_the_mouse_callback_on_first_show(self, monkeypatch):
+        fake_cv2 = install_fake_cv2(monkeypatch)
+        canvas = ImgCanvas("My Window")
+
+        canvas.show(loaded_img(), delay_ms=1)
+
+        assert fake_cv2.named_window_calls == ["My Window"]
+        assert "My Window" in fake_cv2.mouse_callbacks
+
+    def test_only_creates_the_window_once_across_repeated_shows(self, monkeypatch):
+        fake_cv2 = install_fake_cv2(monkeypatch)
+        canvas = ImgCanvas("My Window")
+
+        canvas.show(loaded_img(), delay_ms=1)
+        canvas.show(loaded_img(), delay_ms=1)
+
+        assert fake_cv2.named_window_calls == ["My Window"]
+
+    def test_drain_returns_buffered_left_clicks_and_then_empties(self, monkeypatch):
+        fake_cv2 = install_fake_cv2(monkeypatch)
+        canvas = ImgCanvas("My Window")
+        canvas.show(loaded_img(), delay_ms=1)
+
+        fake_cv2.click("My Window", 30, 40)
+        fake_cv2.click("My Window", 150, 260)
+
+        assert canvas.drain_clicks() == [(30, 40), (150, 260)]
+        assert canvas.drain_clicks() == []
+
+    def test_ignores_non_left_button_mouse_events(self, monkeypatch):
+        fake_cv2 = install_fake_cv2(monkeypatch)
+        canvas = ImgCanvas("My Window")
+        canvas.show(loaded_img(), delay_ms=1)
+
+        callback = fake_cv2.mouse_callbacks["My Window"]
+        callback(fake_cv2.EVENT_MOUSEMOVE, 10, 10, 0, None)
+
+        assert canvas.drain_clicks() == []
+
+    def test_drain_is_empty_before_any_clicks(self, monkeypatch):
+        install_fake_cv2(monkeypatch)
+        canvas = ImgCanvas()
+
+        assert canvas.drain_clicks() == []
 
 
 class TestClose:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Optional, Protocol, Tuple, runtime_checkable
+from typing import Any, List, Optional, Protocol, Tuple, runtime_checkable
 
 # Opaque handle to a loaded image. Consumers never inspect it - only the
 # concrete Canvas that produced it knows its real type (an Img for ImgCanvas,
@@ -33,5 +33,7 @@ class Canvas(Protocol):
     def show(self, frame: ImageHandle, delay_ms: int) -> bool: ...
 
     def save(self, frame: ImageHandle, path: Path) -> None: ...
+
+    def drain_clicks(self) -> List[Tuple[int, int]]: ...
 
     def close(self) -> None: ...

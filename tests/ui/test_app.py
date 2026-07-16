@@ -42,26 +42,34 @@ class TestBuildVisualStates:
         controller = FakeGameController([piece])
         animator = FakeAnimator()
 
-        visuals = build_visual_states(controller, animator, now_ms=1000, cell_size_px=CELL_SIZE_PX)
+        visuals = build_visual_states(
+            controller, animator, engine_ms=1000, render_ms=7000, cell_size_px=CELL_SIZE_PX
+        )
 
         visual = visuals[1]
         assert (visual.pixel_x, visual.pixel_y) == cell_top_left_px(Position(1, 1), CELL_SIZE_PX)
-        assert animator.calls == [(1, False, False, 1000)]
+        # The animator (cosmetic frames) is driven by the render/wall clock, not the engine clock.
+        assert animator.calls == [(1, False, False, 7000)]
 
-    def test_moving_piece_uses_interpolated_position(self):
+    def test_moving_piece_interpolates_on_the_engine_clock(self):
         piece = piece_view(1, row=4, col=0)
         motion = MotionInfo(from_pos=Position(4, 0), to_pos=Position(4, 2), start_ms=0, duration_ms=1000, is_jump=False)
         controller = FakeGameController([piece], motions={1: motion})
         animator = FakeAnimator()
 
-        visuals = build_visual_states(controller, animator, now_ms=500, cell_size_px=CELL_SIZE_PX)
+        # engine_ms=500 is halfway through the 1000ms motion; render_ms differs
+        # to prove position tracks the engine clock, not the wall clock.
+        visuals = build_visual_states(
+            controller, animator, engine_ms=500, render_ms=12345, cell_size_px=CELL_SIZE_PX
+        )
 
         visual = visuals[1]
         from_x, from_y = cell_top_left_px(Position(4, 0), CELL_SIZE_PX)
         to_x, to_y = cell_top_left_px(Position(4, 2), CELL_SIZE_PX)
         assert visual.pixel_x == (from_x + to_x) / 2
         assert visual.pixel_y == (from_y + to_y) / 2
-        assert animator.calls == [(1, True, False, 500)]
+        # ...while the animator still sees the render clock.
+        assert animator.calls == [(1, True, False, 12345)]
 
     def test_moving_piece_forwards_is_jump_flag(self):
         piece = piece_view(1, row=7, col=1)
@@ -69,7 +77,7 @@ class TestBuildVisualStates:
         controller = FakeGameController([piece], motions={1: motion})
         animator = FakeAnimator()
 
-        build_visual_states(controller, animator, now_ms=100, cell_size_px=CELL_SIZE_PX)
+        build_visual_states(controller, animator, engine_ms=100, render_ms=100, cell_size_px=CELL_SIZE_PX)
 
         assert animator.calls == [(1, True, True, 100)]
 
@@ -77,7 +85,7 @@ class TestBuildVisualStates:
         controller = FakeGameController([])
         animator = FakeAnimator()
 
-        visuals = build_visual_states(controller, animator, now_ms=0, cell_size_px=CELL_SIZE_PX)
+        visuals = build_visual_states(controller, animator, engine_ms=0, render_ms=0, cell_size_px=CELL_SIZE_PX)
 
         assert visuals == {}
         assert animator.calls == []
@@ -87,7 +95,7 @@ class TestBuildVisualStates:
         controller = FakeGameController([piece])
         animator = FakeAnimator()
 
-        visuals = build_visual_states(controller, animator, now_ms=0, cell_size_px=CELL_SIZE_PX)
+        visuals = build_visual_states(controller, animator, engine_ms=0, render_ms=0, cell_size_px=CELL_SIZE_PX)
 
         assert visuals[1].sprite_state == "some_state"
         assert visuals[1].frame_index == 1

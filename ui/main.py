@@ -19,6 +19,7 @@ from ui.graphics.renderer import BoardRenderer
 from ui.graphics.img_canvas import ImgCanvas
 from ui.app import build_visual_states
 from ui.demo_driver import FrameWriter, run_move_and_capture, write_image
+from ui.game_loop import run_game_loop
 
 STARTING_BOARD = (
     "bR bN bB bQ bK bB bN bR\n"
@@ -46,15 +47,39 @@ def print_board(game_controller) -> None:
         print(" ".join(row))
 
 
-def main(show_window: bool = True) -> None:
+def _build_scene(window_title: str):
+    """Wires the full render/controller/animation stack, returning the pieces both entry points share."""
     session = create_game_session(STARTING_BOARD)
     game_controller = build_game_controller(session, cell_size_px=CELL_SIZE_PX)
     animator = PieceAnimator(load_animation_configs(PIECES_DIR))
 
-    canvas = ImgCanvas("Kung-Fu-Chess - Stage 4 motion demo")
+    canvas = ImgCanvas(window_title)
     resolver = SpriteResolver(PIECES_DIR, SPRITE_STATE, SPRITE_FRAME_FILENAME)
     sprite_loader = SpriteLoader(canvas, resolver, sprite_size_px=(CELL_SIZE_PX, CELL_SIZE_PX))
     renderer = BoardRenderer(canvas, sprite_loader, BOARD_IMAGE_PATH, CELL_SIZE_PX)
+    return session, game_controller, animator, canvas, renderer
+
+
+def main() -> None:
+    """Real interactive game: a human clicks pieces in the live window to play in real time."""
+    _, game_controller, animator, canvas, renderer = _build_scene("Kung-Fu-Chess")
+
+    print("Starting board:")
+    print_board(game_controller)
+    print("\nClick a piece, then its destination. Press Esc or q to quit.")
+
+    try:
+        run_game_loop(canvas, game_controller, animator, renderer, CELL_SIZE_PX)
+    finally:
+        canvas.close()
+
+    print("\nFinal board:")
+    print_board(game_controller)
+
+
+def run_capture_demo(show_window: bool = True) -> None:
+    """Deterministic scripted demo: plays two fixed opening moves and captures every tick to disk."""
+    _, game_controller, animator, canvas, renderer = _build_scene("Kung-Fu-Chess - Stage 4 motion demo")
     live_canvas = canvas if show_window else None
 
     ANIMATION_FRAMES_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -97,7 +122,11 @@ def main(show_window: bool = True) -> None:
 
     rendered = renderer.render(
         game_controller.board_snapshot(),
-        build_visual_states(game_controller, animator, game_controller.clock_ms, CELL_SIZE_PX),
+        build_visual_states(
+            game_controller, animator,
+            engine_ms=game_controller.clock_ms, render_ms=game_controller.clock_ms,
+            cell_size_px=CELL_SIZE_PX,
+        ),
     )
     write_image(canvas, RENDERED_BOARD_OUTPUT_PATH, rendered)
     print(f"\nRendered board image saved to: {RENDERED_BOARD_OUTPUT_PATH}")
@@ -105,4 +134,7 @@ def main(show_window: bool = True) -> None:
 
 
 if __name__ == "__main__":  # pragma: no cover - script entry point, not exercised by imports
-    main(show_window="--no-window" not in sys.argv)
+    if "--demo" in sys.argv:
+        run_capture_demo(show_window="--no-window" not in sys.argv)
+    else:
+        main()

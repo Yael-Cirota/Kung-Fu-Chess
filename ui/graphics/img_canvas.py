@@ -43,15 +43,25 @@ class ImgCanvas:
     def draw_text(self, frame: Img, text, x, y, font_scale, color, thickness=1) -> None:
         frame.put_text(text, x, y, font_scale, color=color, thickness=thickness)
 
+    def fill_rect(self, frame: Img, x, y, w, h, color, alpha=1.0) -> None:
+        frame.fill_rect(x, y, w, h, color, alpha=alpha)
+
     def blit(self, frame: Img, image: Img, x: int, y: int) -> None:
         image.draw_on(frame, x, y)
 
     def show(self, frame: Img, delay_ms: int) -> bool:
-        """Displays one frame in the live window. Returns False if the user asked to quit (Esc/q)."""
+        """Displays one frame in the live window. Returns False if the user asked to quit.
+
+        Quitting is any of: Esc/q, or closing the window with its title-bar X.
+        The X is detected via WND_PROP_VISIBLE dropping below 1 - OpenCV has no
+        close event, so we poll the property each frame after pumping waitKey.
+        """
         self._ensure_window()
         cv2.imshow(self._window_title, frame.img)
         key = cv2.waitKey(max(1, delay_ms)) & 0xFF
-        return key not in (27, ord("q"))
+        if key in (27, ord("q")):
+            return False
+        return cv2.getWindowProperty(self._window_title, cv2.WND_PROP_VISIBLE) >= 1
 
     def save(self, frame: Img, path) -> None:
         cv2.imwrite(str(path), frame.img)
@@ -64,7 +74,13 @@ class ImgCanvas:
 
     def close(self) -> None:
         if self._window_open:
-            cv2.destroyWindow(self._window_title)
+            # If the user closed the window with its X, the OS already tore it
+            # down, so destroyWindow raises a NULL-window cv2.error. That is
+            # exactly the state close() wants, so swallow it and mark it shut.
+            try:
+                cv2.destroyWindow(self._window_title)
+            except cv2.error:
+                pass
             self._window_open = False
 
     def _ensure_window(self):

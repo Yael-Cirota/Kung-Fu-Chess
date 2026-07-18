@@ -71,6 +71,22 @@ class TestBuildVisualStates:
         # ...while the animator still sees the render clock.
         assert animator.calls == [(1, True, False, 12345)]
 
+    def test_moving_piece_position_is_smoothstep_eased_not_linear(self):
+        piece = piece_view(1, row=0, col=0)
+        motion = MotionInfo(from_pos=Position(0, 0), to_pos=Position(0, 4), start_ms=0, duration_ms=1000, is_jump=False)
+        controller = FakeGameController([piece], motions={1: motion})
+        animator = FakeAnimator()
+
+        # engine_ms=250 -> linear t=0.25, but smoothstep(0.25)=0.15625, so the
+        # piece sits behind where a straight-line interpolation would place it.
+        visuals = build_visual_states(
+            controller, animator, engine_ms=250, render_ms=250, cell_size_px=CELL_SIZE_PX
+        )
+
+        _from_x, _ = cell_top_left_px(Position(0, 0), CELL_SIZE_PX)
+        to_x, _ = cell_top_left_px(Position(0, 4), CELL_SIZE_PX)
+        assert visuals[1].pixel_x == 0.15625 * to_x  # eased, not 0.25 * to_x
+
     def test_moving_piece_forwards_is_jump_flag(self):
         piece = piece_view(1, row=7, col=1)
         motion = MotionInfo(from_pos=Position(7, 1), to_pos=Position(5, 2), start_ms=0, duration_ms=250, is_jump=True)

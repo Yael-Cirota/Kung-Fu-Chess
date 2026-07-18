@@ -57,35 +57,64 @@ class Img:
         if self.img is None or other_img.img is None:
             raise ValueError("Both images must be loaded before drawing.")
 
-        # Reconcile channel counts on a *local* copy. cv2.cvtColor returns a
-        # new array, so self.img is never reassigned or mutated here. This
-        # matters because SpriteLoader caches Img instances and reuses them
-        # across frames: the previous version reassigned self.img, which
-        # permanently corrupted a cached sprite's alpha the first time it was
-        # blitted onto a differently-shaped background (e.g. a 4-channel
-        # sprite onto a 3-channel frame).
+        # Never mutate src: SpriteLoader caches Img instances and reuses them
+        # across frames, so flattening/altering self.img here would corrupt a
+        # cached sprite's alpha for every later blit.
         src = self.img
-        if src.shape[2] != other_img.img.shape[2]:
-            if src.shape[2] == 3 and other_img.img.shape[2] == 4:
-                src = cv2.cvtColor(src, cv2.COLOR_BGR2BGRA)
-            elif src.shape[2] == 4 and other_img.img.shape[2] == 3:
-                src = cv2.cvtColor(src, cv2.COLOR_BGRA2BGR)
+        dst = other_img.img
 
         h, w = src.shape[:2]
-        H, W = other_img.img.shape[:2]
+        H, W = dst.shape[:2]
 
         if y + h > H or x + w > W:
             raise ValueError("Logo does not fit at the specified position.")
 
-        roi = other_img.img[y:y + h, x:x + w]
+        roi = dst[y:y + h, x:x + w]
 
         if src.shape[2] == 4:
-            b, g, r, a = cv2.split(src)
-            mask = a / 255.0
+            # Alpha-composite the sprite over whatever is underneath, using the
+            # sprite's OWN alpha. This is keyed off the sprite having alpha, not
+            # off the destination matching channel counts: a transparent sprite
+            # background must stay transparent even when blitted onto a plain
+            # 3-channel frame (the side-panel canvas), which the old
+            # channel-reconciling path silently flattened to an opaque paste.
+            alpha = src[..., 3] / 255.0
             for c in range(3):
-                roi[..., c] = (1 - mask) * roi[..., c] + mask * src[..., c]
+                roi[..., c] = (1 - alpha) * roi[..., c] + alpha * src[..., c]
+            if roi.shape[2] == 4:
+                # Composite the destination alpha too ("over" operator), so the
+                # region stays at least as opaque as the sprite made it.
+                dst_alpha = roi[..., 3] / 255.0
+                roi[..., 3] = ((alpha + dst_alpha * (1 - alpha)) * 255).astype("uint8")
         else:
-            other_img.img[y:y + h, x:x + w] = src
+            # Opaque sprite: straight colour copy; mark opaque if dst has alpha.
+            roi[..., :3] = src[..., :3]
+            if roi.shape[2] == 4:
+                roi[..., 3] = 255
+
+    def fill_rect(self, x, y, w, h, color, alpha=1.0):
+        """
+        Paint a `w`x`h` rectangle at (x, y) in `color` (BGR), optionally
+        alpha-blended over what is already there (alpha=1.0 is an opaque fill).
+        The rectangle is clipped to the image bounds, so callers can request a
+        highlight that runs off an edge without raising. Only the colour
+        channels are touched, so this is safe on both 3- and 4-channel frames.
+        """
+        if self.img is None:
+            raise ValueError("Image not loaded.")
+
+        H, W = self.img.shape[:2]
+        x0, y0 = max(0, x), max(0, y)
+        x1, y1 = min(W, x + w), min(H, y + h)
+        if x1 <= x0 or y1 <= y0:
+            return
+
+        roi = self.img[y0:y1, x0:x1, :3]
+        fill = np.array(color[:3], dtype=np.float32)
+        if alpha >= 1.0:
+            roi[:] = fill.astype(roi.dtype)
+        else:
+            roi[:] = ((1.0 - alpha) * roi + alpha * fill).astype(roi.dtype)
 
     def put_text(self, txt, x, y, font_size, color=(255, 255, 255, 255), thickness=1):
         if self.img is None:

@@ -31,6 +31,9 @@ def build_visual_states(
         engine's own clock basis, so position must be read against that same
         clock - otherwise we could interpolate a piece past a collision the
         engine hasn't resolved yet, rendering an outcome that never happened.
+        The fraction is smoothstep-eased (ease_in_out) purely for a nicer
+        glide; that remap is monotonic with exact endpoints, so it stays on
+        the engine clock and never moves a piece past its resolved arrival.
       - render_ms drives *only* the animator, i.e. cosmetic sprite-frame
         selection and the idle/rest state-machine pacing. Those run on the
         wall clock so animations stay smooth and time-based even on frames
@@ -47,7 +50,7 @@ def build_visual_states(
             pixel_x, pixel_y = motion_predictor.interpolate(
                 cell_top_left_px(motion.from_pos, cell_size_px),
                 cell_top_left_px(motion.to_pos, cell_size_px),
-                t,
+                motion_predictor.ease_in_out(t),
             )
             sprite_state, frame_index = animator.update(
                 piece_view.piece_id, is_moving=True, is_jump=motion.is_jump, now_ms=render_ms

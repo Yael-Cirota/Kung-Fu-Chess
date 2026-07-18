@@ -8,8 +8,10 @@ from ui.img import Img
 class FakeCv2:
     EVENT_LBUTTONDOWN = 1
     EVENT_MOUSEMOVE = 0
+    WND_PROP_VISIBLE = 4
+    error = RuntimeError  # stand-in for cv2.error
 
-    def __init__(self, wait_key_return=ord("a")):
+    def __init__(self, wait_key_return=ord("a"), window_visible=1.0, destroy_raises=False):
         self.imshow_calls = []
         self.wait_key_calls = []
         self.imwrite_calls = []
@@ -17,6 +19,8 @@ class FakeCv2:
         self.named_window_calls = []
         self.mouse_callbacks = {}
         self._wait_key_return = wait_key_return
+        self._window_visible = window_visible
+        self._destroy_raises = destroy_raises
 
     def imshow(self, title, array):
         self.imshow_calls.append((title, array))
@@ -41,10 +45,15 @@ class FakeCv2:
 
     def destroyWindow(self, title):
         self.destroy_window_calls.append(title)
+        if self._destroy_raises:
+            raise self.error("NULL window")
+
+    def getWindowProperty(self, title, prop_id):
+        return self._window_visible
 
 
-def install_fake_cv2(monkeypatch, wait_key_return=ord("a")):
-    fake_cv2 = FakeCv2(wait_key_return)
+def install_fake_cv2(monkeypatch, wait_key_return=ord("a"), window_visible=1.0, destroy_raises=False):
+    fake_cv2 = FakeCv2(wait_key_return, window_visible, destroy_raises)
     monkeypatch.setattr(img_canvas_module, "cv2", fake_cv2)
     return fake_cv2
 
@@ -93,6 +102,32 @@ class TestDrawText:
         canvas.draw_text(FakeFrame(), "White", 8, 30, 0.5, (240, 240, 240), thickness=2)
 
         assert recorded == [("White", 8, 30, 0.5, (240, 240, 240), 2)]
+
+
+class TestFillRect:
+    def test_delegates_to_the_frame_fill_rect(self):
+        canvas = ImgCanvas()
+        recorded = []
+
+        class FakeFrame:
+            def fill_rect(self, x, y, w, h, color, alpha):
+                recorded.append((x, y, w, h, color, alpha))
+
+        canvas.fill_rect(FakeFrame(), 5, 6, 20, 8, (90, 200, 130), alpha=0.3)
+
+        assert recorded == [(5, 6, 20, 8, (90, 200, 130), 0.3)]
+
+    def test_defaults_to_an_opaque_fill(self):
+        canvas = ImgCanvas()
+        recorded = []
+
+        class FakeFrame:
+            def fill_rect(self, x, y, w, h, color, alpha):
+                recorded.append(alpha)
+
+        canvas.fill_rect(FakeFrame(), 0, 0, 4, 4, (1, 2, 3))
+
+        assert recorded == [1.0]
 
 
 class TestBlit:
@@ -153,6 +188,18 @@ class TestShow:
         canvas = ImgCanvas()
 
         assert canvas.show(loaded_img(), delay_ms=40) is False
+
+    def test_returns_false_when_the_window_was_closed_with_its_x_button(self, monkeypatch):
+        install_fake_cv2(monkeypatch, wait_key_return=ord("a"), window_visible=0.0)
+        canvas = ImgCanvas()
+
+        assert canvas.show(loaded_img(), delay_ms=40) is False
+
+    def test_returns_true_while_the_window_is_still_visible(self, monkeypatch):
+        install_fake_cv2(monkeypatch, wait_key_return=ord("a"), window_visible=1.0)
+        canvas = ImgCanvas()
+
+        assert canvas.show(loaded_img(), delay_ms=40) is True
 
 
 class TestSave:
@@ -230,3 +277,12 @@ class TestClose:
         canvas.close()
 
         assert fake_cv2.destroy_window_calls == []
+
+    def test_close_swallows_null_window_error_when_the_x_already_tore_it_down(self, monkeypatch):
+        fake_cv2 = install_fake_cv2(monkeypatch, destroy_raises=True)
+        canvas = ImgCanvas("My Window")
+        canvas.show(loaded_img(), delay_ms=1)
+
+        canvas.close()  # must not raise
+
+        assert fake_cv2.destroy_window_calls == ["My Window"]

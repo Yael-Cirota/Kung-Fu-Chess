@@ -91,10 +91,11 @@ class TestDrawOn:
         pixel = frame.img[0, 0]
         assert all(120 <= channel <= 135 for channel in pixel[:3])
 
-    def test_alpha_is_dropped_when_frame_has_no_alpha_channel(self):
-        # draw_on reconciles channel counts before blending: a 4-channel
-        # sprite drawn onto a 3-channel frame is first flattened to BGR
-        # (losing its alpha), so it lands as a plain opaque overwrite.
+    def test_blends_using_alpha_even_when_frame_has_no_alpha_channel(self):
+        # A 4-channel sprite blitted onto a 3-channel frame must still respect
+        # its own alpha: the sprite's transparent background stays transparent
+        # (this is what keeps piece backgrounds from stamping a solid box onto
+        # the side-panel canvas). Here alpha=128 blends white halfway onto black.
         frame = Img()
         frame.img = solid_bgr(4, 4, (0, 0, 0))
         sprite = Img()
@@ -102,7 +103,22 @@ class TestDrawOn:
 
         sprite.draw_on(frame, 0, 0)
 
-        assert tuple(frame.img[0, 0]) == (255, 255, 255)
+        assert frame.img.shape[2] == 3  # frame stays 3-channel
+        assert all(120 <= channel <= 135 for channel in frame.img[0, 0])
+
+    def test_transparent_sprite_region_leaves_frame_untouched(self):
+        # The piece-background bug: a sprite pixel with alpha=0 must not paint
+        # over the frame, whether or not the frame carries an alpha channel.
+        for frame_img in (solid_bgr(4, 4, (10, 20, 30)),
+                          solid_bgra(4, 4, (10, 20, 30), alpha=255)):
+            frame = Img()
+            frame.img = frame_img
+            sprite = Img()
+            sprite.img = solid_bgra(4, 4, (200, 200, 200), alpha=0)  # fully transparent
+
+            sprite.draw_on(frame, 0, 0)
+
+            assert tuple(frame.img[0, 0][:3]) == (10, 20, 30)
 
     def test_converts_bgr_sprite_onto_bgra_frame(self):
         frame = Img()
@@ -155,6 +171,57 @@ class TestDrawOn:
 
         with pytest.raises(ValueError):
             sprite.draw_on(frame, 2, 2)  # 2+3 > 4 on both axes
+
+
+class TestFillRect:
+    def test_opaque_fill_paints_the_region(self):
+        img = Img()
+        img.img = solid_bgr(10, 10, (0, 0, 0))
+
+        img.fill_rect(2, 3, 4, 5, (10, 20, 30))
+
+        assert tuple(img.img[3, 2]) == (10, 20, 30)
+        assert tuple(img.img[3 + 4, 2 + 3]) == (10, 20, 30)
+        assert tuple(img.img[0, 0]) == (0, 0, 0)  # outside the rect, untouched
+
+    def test_alpha_blends_over_the_existing_pixels(self):
+        img = Img()
+        img.img = solid_bgr(4, 4, (0, 0, 0))
+
+        img.fill_rect(0, 0, 4, 4, (200, 200, 200), alpha=0.5)
+
+        assert all(95 <= channel <= 105 for channel in img.img[0, 0])
+
+    def test_clips_to_the_image_bounds_without_raising(self):
+        img = Img()
+        img.img = solid_bgr(4, 4, (0, 0, 0))
+
+        img.fill_rect(-2, -2, 4, 4, (5, 5, 5))  # runs off the top-left corner
+
+        assert tuple(img.img[0, 0]) == (5, 5, 5)
+        assert tuple(img.img[2, 2]) == (0, 0, 0)  # beyond the clipped rect
+
+    def test_a_fully_offscreen_rect_is_a_noop(self):
+        img = Img()
+        img.img = solid_bgr(4, 4, (7, 7, 7))
+        before = img.img.copy()
+
+        img.fill_rect(10, 10, 3, 3, (0, 0, 0))
+
+        assert np.array_equal(before, img.img)
+
+    def test_only_touches_color_channels_on_a_bgra_frame(self):
+        img = Img()
+        img.img = solid_bgra(4, 4, (0, 0, 0), alpha=255)
+
+        img.fill_rect(0, 0, 4, 4, (10, 20, 30))
+
+        assert tuple(img.img[0, 0][:3]) == (10, 20, 30)
+        assert img.img[0, 0][3] == 255  # alpha channel left intact
+
+    def test_raises_when_not_loaded(self):
+        with pytest.raises(ValueError):
+            Img().fill_rect(0, 0, 2, 2, (0, 0, 0))
 
 
 class TestPutText:

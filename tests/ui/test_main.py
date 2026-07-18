@@ -17,6 +17,7 @@ class FakeWindowCv2:
     """Stands in for cv2 inside ui.graphics.img_canvas so main/run_capture_demo never touch a real display."""
 
     EVENT_LBUTTONDOWN = 1
+    WND_PROP_VISIBLE = 4
 
     def __init__(self, wait_key_return=ord("a")):
         self.destroy_window_calls = []
@@ -40,6 +41,9 @@ class FakeWindowCv2:
 
     def destroyWindow(self, title):
         self.destroy_window_calls.append(title)
+
+    def getWindowProperty(self, title, prop_id):
+        return 1.0  # window stays visible; quitting in these tests comes via waitKey
 
 
 class TestMain:

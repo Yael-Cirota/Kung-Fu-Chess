@@ -1,6 +1,7 @@
 from pathlib import Path
 
-from controller.api import BoardSnapshot, PieceView, Position
+from controller.api import BoardSnapshot, MoveLogEntry, PieceView, Position
+from ui.graphics.board_theme import BoardTheme
 from ui.graphics.piece_visual_state import PieceVisualState
 from ui.graphics.renderer import BoardRenderer
 
@@ -40,6 +41,8 @@ class FakeCanvas:
     def __init__(self):
         self.blits = []  # (frame, sprite_handle, x, y)
         self.blanks = []  # (size, color)
+        self.fills = []  # (x, y, w, h, color, alpha)
+        self.texts = []  # (text, x, y, scale, color, thickness)
 
     def load_image(self, path, size=None, keep_aspect=False):
         return FakeFrame(Path(path), size)
@@ -51,6 +54,12 @@ class FakeCanvas:
 
     def blit(self, frame, image, x, y):
         self.blits.append((frame, image, x, y))
+
+    def fill_rect(self, frame, x, y, w, h, color, alpha=1.0):
+        self.fills.append((x, y, w, h, color, alpha))
+
+    def draw_text(self, frame, text, x, y, font_scale, color, thickness=1):
+        self.texts.append((text, x, y, font_scale, color, thickness))
 
 
 class FakeMoveLogPanel:
@@ -249,3 +258,156 @@ class TestScorePanel:
         renderer.render(board, scoreboard="SB")  # no move_log -> board-only path
 
         assert score_panel.draw_calls == []
+
+
+def move_entry(color, symbol, frm, to):
+    return MoveLogEntry(color=color, symbol=symbol, from_pos=frm, to_pos=to)
+
+
+class TestBoardThemeCoordinates:
+    def test_no_theme_draws_no_coordinate_labels(self):
+        canvas = FakeCanvas()
+        board = snapshot(2, 2)
+        renderer = BoardRenderer(canvas, FakeSpriteLoader(), "/assets/board.png", cell_size_px=64)
+
+        renderer.render(board)
+
+        assert canvas.texts == []
+
+    def test_theme_labels_files_along_the_bottom_and_ranks_down_the_left(self):
+        canvas = FakeCanvas()
+        board = snapshot(2, 2)
+        # No halo here so each label maps to exactly one draw_text call.
+        theme = BoardTheme(highlight_last_move=False, coordinate_outline_thickness=0)
+        renderer = BoardRenderer(canvas, FakeSpriteLoader(), "/assets/board.png", 64, board_theme=theme)
+
+        renderer.render(board)
+
+        labels = [t[0] for t in canvas.texts]
+        assert labels == ["a", "b", "2", "1"]  # files a,b along bottom; ranks 2,1 top-to-bottom
+        by_label = {t[0]: t for t in canvas.texts}
+        # file 'a' sits at the left of col 0, near the bottom edge (board_h=128).
+        assert by_label["a"][1] == theme.coordinate_margin_px
+        assert by_label["a"][2] == 128 - theme.coordinate_margin_px
+        # rank '2' labels the top row, in the left margin.
+        assert by_label["2"][1] == theme.coordinate_margin_px
+
+    def test_each_glyph_gets_a_darker_halo_drawn_under_it_for_contrast(self):
+        canvas = FakeCanvas()
+        board = snapshot(1, 1)  # a single cell -> one file 'a' and one rank '1'
+        theme = BoardTheme(
+            highlight_last_move=False, coordinate_color=(230, 230, 230),
+            coordinate_thickness=1, coordinate_outline_color=(30, 30, 30),
+            coordinate_outline_thickness=3,
+        )
+        renderer = BoardRenderer(canvas, FakeSpriteLoader(), "/assets/board.png", 64, board_theme=theme)
+
+        renderer.render(board)
+
+        # Per glyph: the thick dark halo is drawn first, the light label second on top.
+        colors_and_thickness = [(t[4], t[5]) for t in canvas.texts]
+        assert colors_and_thickness == [
+            ((30, 30, 30), 3), ((230, 230, 230), 1),   # 'a' halo then label
+            ((30, 30, 30), 3), ((230, 230, 230), 1),   # '1' halo then label
+        ]
+
+    def test_coordinates_can_be_disabled(self):
+        canvas = FakeCanvas()
+        board = snapshot(2, 2)
+        theme = BoardTheme(show_coordinates=False, highlight_last_move=False)
+        renderer = BoardRenderer(canvas, FakeSpriteLoader(), "/assets/board.png", 64, board_theme=theme)
+
+        renderer.render(board)
+
+        assert canvas.texts == []
+
+
+class TestBoardThemeLastMoveHighlight:
+    def test_highlights_the_from_and_to_cells_of_the_last_logged_move(self):
+        canvas = FakeCanvas()
+        panel = FakeMoveLogPanel()
+        board = snapshot(8, 8)
+        theme = BoardTheme(show_coordinates=False, last_move_color=(90, 200, 130), last_move_alpha=0.3)
+        renderer = BoardRenderer(
+            canvas, FakeSpriteLoader(), "/assets/board.png", 64, panel, board_theme=theme
+        )
+        log = [
+            move_entry("w", "wP", Position(6, 0), Position(5, 0)),  # older move
+            move_entry("b", "bP", Position(1, 3), Position(3, 3)),  # newest -> highlighted
+        ]
+
+        renderer.render(board, move_log=log)
+
+        # from (1,3) and to (3,3), each a 64px cell washed at the theme's alpha.
+        assert canvas.fills == [
+            (3 * 64, 1 * 64, 64, 64, (90, 200, 130), 0.3),
+            (3 * 64, 3 * 64, 64, 64, (90, 200, 130), 0.3),
+        ]
+
+    def test_no_highlight_on_the_board_only_path(self):
+        canvas = FakeCanvas()
+        board = snapshot(8, 8)
+        theme = BoardTheme(show_coordinates=False)
+        renderer = BoardRenderer(canvas, FakeSpriteLoader(), "/assets/board.png", 64, board_theme=theme)
+
+        renderer.render(board)  # move_log is None
+
+        assert canvas.fills == []
+
+    def test_no_highlight_when_the_log_is_empty(self):
+        canvas = FakeCanvas()
+        panel = FakeMoveLogPanel()
+        board = snapshot(8, 8)
+        theme = BoardTheme(show_coordinates=False)
+        renderer = BoardRenderer(
+            canvas, FakeSpriteLoader(), "/assets/board.png", 64, panel, board_theme=theme
+        )
+
+        renderer.render(board, move_log=[])
+
+        assert canvas.fills == []
+
+    def test_highlight_can_be_disabled(self):
+        canvas = FakeCanvas()
+        panel = FakeMoveLogPanel()
+        board = snapshot(8, 8)
+        theme = BoardTheme(highlight_last_move=False, show_coordinates=False)
+        renderer = BoardRenderer(
+            canvas, FakeSpriteLoader(), "/assets/board.png", 64, panel, board_theme=theme
+        )
+
+        renderer.render(board, move_log=[move_entry("w", "wP", Position(6, 0), Position(5, 0))])
+
+        assert canvas.fills == []
+
+    def test_highlight_sits_under_the_pieces(self):
+        # The wash must be painted before the sprites, so a piece standing on a
+        # highlighted cell is drawn on top of the tint, not hidden by it.
+        canvas = FakeCanvas()
+        panel = FakeMoveLogPanel()
+        pawn = make_piece_view(1, "wP", row=5, col=0)
+        board = snapshot(8, 8, pawn)
+        theme = BoardTheme(show_coordinates=False)
+        renderer = BoardRenderer(
+            canvas, FakeSpriteLoader(), "/assets/board.png", 64, panel, board_theme=theme
+        )
+
+        # Record fills and *sprite* blits (not the board blit) in call order.
+        order = []
+        real_fill, real_blit = canvas.fill_rect, canvas.blit
+
+        def spy_fill(*a, **k):
+            order.append("fill")
+            return real_fill(*a, **k)
+
+        def spy_blit(frame, image, x, y):
+            if image == "sprite:wP":
+                order.append("piece")
+            return real_blit(frame, image, x, y)
+
+        canvas.fill_rect = spy_fill
+        canvas.blit = spy_blit
+
+        renderer.render(board, move_log=[move_entry("w", "wP", Position(6, 0), Position(5, 0))])
+
+        assert order == ["fill", "fill", "piece"]

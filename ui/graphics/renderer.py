@@ -21,13 +21,17 @@ class BoardRenderer:
     """
 
     def __init__(self, canvas: Canvas, sprite_loader: SpriteLoader, board_image_path: Path, cell_size_px: int,
-                 move_log_panel=None, score_panel=None):
+                 move_log_panel=None, score_panel=None, board_theme=None):
         self._canvas = canvas
         self._sprite_loader = sprite_loader
         self._board_image_path = Path(board_image_path)
         self._cell_size_px = cell_size_px
         self._move_log_panel = move_log_panel
         self._score_panel = score_panel
+        # Optional cosmetic overlays (last-move highlight, coordinate labels).
+        # None keeps the bare board exactly as before, so the demo/board-only
+        # paths and their tests are unaffected.
+        self._board_theme = board_theme
 
     def render(self, board_snapshot, visual_states: Optional[Dict[int, PieceVisualState]] = None,
                move_log=None, scoreboard=None) -> ImageHandle:
@@ -47,6 +51,12 @@ class BoardRenderer:
             )
             self._canvas.blit(frame, board_image, 0, 0)
 
+        # Cosmetic overlays sit between the board and the pieces so a moving
+        # sprite always rides on top of its highlight, never under it.
+        if self._board_theme is not None:
+            self._draw_last_move_highlight(frame, move_log)
+            self._draw_coordinates(frame, rows, cols, board_h)
+
         for piece_view in board_snapshot.pieces():
             visual = visual_states.get(piece_view.piece_id)
             if visual is not None:
@@ -65,3 +75,44 @@ class BoardRenderer:
             self._move_log_panel.draw(self._canvas, frame, move_log, board_w, board_h, rows)
 
         return frame
+
+    def _draw_last_move_highlight(self, frame, move_log) -> None:
+        """Washes the from/to cells of the newest logged move in a translucent tint."""
+        theme = self._board_theme
+        if not theme.highlight_last_move or not move_log:
+            return
+        last = move_log[-1]
+        for pos in (last.from_pos, last.to_pos):
+            self._canvas.fill_rect(
+                frame, pos.col * self._cell_size_px, pos.row * self._cell_size_px,
+                self._cell_size_px, self._cell_size_px,
+                theme.last_move_color, alpha=theme.last_move_alpha,
+            )
+
+    def _draw_coordinates(self, frame, rows, cols, board_h) -> None:
+        """File letters along the bottom edge and rank numbers down the left edge."""
+        theme = self._board_theme
+        if not theme.show_coordinates:
+            return
+        margin = theme.coordinate_margin_px
+        for col in range(cols):
+            self._draw_label(frame, chr(ord("a") + col), col * self._cell_size_px + margin, board_h - margin)
+        for row in range(rows):
+            self._draw_label(frame, str(rows - row), margin, row * self._cell_size_px + margin + self._text_baseline_px())
+
+    def _draw_label(self, frame, text, x, y) -> None:
+        """One coordinate glyph: a darker halo underneath (if enabled) then the label on top."""
+        theme = self._board_theme
+        if theme.coordinate_outline_thickness:
+            self._canvas.draw_text(
+                frame, text, x, y, theme.coordinate_font_scale,
+                theme.coordinate_outline_color, theme.coordinate_outline_thickness,
+            )
+        self._canvas.draw_text(
+            frame, text, x, y, theme.coordinate_font_scale,
+            theme.coordinate_color, theme.coordinate_thickness,
+        )
+
+    def _text_baseline_px(self) -> int:
+        """Rough cap height so a top-anchored rank label drops below the top edge, not above it."""
+        return max(8, int(self._board_theme.coordinate_font_scale * 26))

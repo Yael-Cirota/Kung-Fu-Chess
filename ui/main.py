@@ -15,6 +15,10 @@ from ui.ui_config import (
     MOVE_LOG_LINE_HEIGHT_PX, MOVE_LOG_HEADER_HEIGHT_PX, MOVE_LOG_PADDING_PX,
     SCORE_PANEL_HEIGHT_PX, SCORE_WHITE_TEXT_COLOR, SCORE_BLACK_TEXT_COLOR,
     SCORE_FONT_SCALE, SCORE_LINE_HEIGHT_PX, SCORE_HEADER_HEIGHT_PX, SCORE_PADDING_PX,
+    BOARD_HIGHLIGHT_LAST_MOVE, BOARD_LAST_MOVE_COLOR, BOARD_LAST_MOVE_ALPHA,
+    BOARD_SHOW_COORDINATES, BOARD_COORDINATE_COLOR, BOARD_COORDINATE_FONT_SCALE,
+    BOARD_COORDINATE_THICKNESS, BOARD_COORDINATE_MARGIN_PX,
+    BOARD_COORDINATE_OUTLINE_COLOR, BOARD_COORDINATE_OUTLINE_THICKNESS,
 )
 from ui.animation.animation_config_loader import load_animation_configs
 from ui.animation.piece_animator import PieceAnimator
@@ -23,6 +27,7 @@ from ui.graphics.sprite_loader import SpriteLoader
 from ui.graphics.renderer import BoardRenderer
 from ui.graphics.move_log_panel import MoveLogPanel
 from ui.graphics.score_panel import ScorePanel
+from ui.graphics.board_theme import BoardTheme
 from ui.graphics.img_canvas import ImgCanvas
 from ui.app import build_visual_states
 from ui.demo_driver import FrameWriter, run_move_and_capture, write_image
@@ -82,8 +87,16 @@ def _build_scene(window_title: str):
         line_height_px=SCORE_LINE_HEIGHT_PX, header_height_px=SCORE_HEADER_HEIGHT_PX,
         padding_px=SCORE_PADDING_PX,
     )
+    board_theme = BoardTheme(
+        highlight_last_move=BOARD_HIGHLIGHT_LAST_MOVE, last_move_color=BOARD_LAST_MOVE_COLOR,
+        last_move_alpha=BOARD_LAST_MOVE_ALPHA, show_coordinates=BOARD_SHOW_COORDINATES,
+        coordinate_color=BOARD_COORDINATE_COLOR, coordinate_font_scale=BOARD_COORDINATE_FONT_SCALE,
+        coordinate_thickness=BOARD_COORDINATE_THICKNESS, coordinate_margin_px=BOARD_COORDINATE_MARGIN_PX,
+        coordinate_outline_color=BOARD_COORDINATE_OUTLINE_COLOR,
+        coordinate_outline_thickness=BOARD_COORDINATE_OUTLINE_THICKNESS,
+    )
     renderer = BoardRenderer(
-        canvas, sprite_loader, BOARD_IMAGE_PATH, CELL_SIZE_PX, move_log_panel, score_panel
+        canvas, sprite_loader, BOARD_IMAGE_PATH, CELL_SIZE_PX, move_log_panel, score_panel, board_theme
     )
     return session, game_controller, animator, canvas, renderer
 

@@ -42,3 +42,16 @@ SCORE_FONT_SCALE = 0.7
 SCORE_LINE_HEIGHT_PX = 26
 SCORE_HEADER_HEIGHT_PX = 24
 SCORE_PADDING_PX = 12
+
+# Cosmetic board overlays (last-move highlight + edge coordinate labels). These
+# draw only *over* the board pixels, never shifting geometry or click mapping.
+BOARD_HIGHLIGHT_LAST_MOVE = True
+BOARD_LAST_MOVE_COLOR = (90, 200, 130)   # BGR: soft green
+BOARD_LAST_MOVE_ALPHA = 0.30
+BOARD_SHOW_COORDINATES = True
+BOARD_COORDINATE_COLOR = (230, 230, 230)  # BGR: near-white glyph
+BOARD_COORDINATE_FONT_SCALE = 0.38
+BOARD_COORDINATE_THICKNESS = 1
+BOARD_COORDINATE_MARGIN_PX = 5
+BOARD_COORDINATE_OUTLINE_COLOR = (30, 30, 30)  # BGR: near-black halo for contrast
+BOARD_COORDINATE_OUTLINE_THICKNESS = 3

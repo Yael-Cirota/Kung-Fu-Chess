@@ -63,6 +63,15 @@ class FakeMoveLogPanel:
         self.draw_calls.append((frame, move_log, board_width_px, board_height_px, rows))
 
 
+class FakeScorePanel:
+    def __init__(self, height_px=64):
+        self.height_px = height_px
+        self.draw_calls = []
+
+    def draw(self, canvas, frame, scoreboard, board_width_px):
+        self.draw_calls.append((frame, scoreboard, board_width_px))
+
+
 class FakeSpriteLoader:
     def __init__(self):
         self.requests = []
@@ -201,3 +210,42 @@ class TestMoveLogPanel:
         sprite_blit = canvas.blits[1]
         assert sprite_blit[1] == "sprite:wR"
         assert sprite_blit[2:] == (64, 0)
+
+
+class TestScorePanel:
+    def test_draws_the_score_panel_over_the_board_width_when_a_scoreboard_is_given(self):
+        canvas = FakeCanvas()
+        score_panel = FakeScorePanel()
+        board = snapshot(2, 2)
+        renderer = BoardRenderer(
+            canvas, FakeSpriteLoader(), "/assets/board.png", 64, FakeMoveLogPanel(), score_panel
+        )
+
+        frame = renderer.render(board, move_log=[], scoreboard="SB")
+
+        # board is 2x2 at 64px = 128 wide; the panel draws over that width.
+        assert score_panel.draw_calls == [(frame, "SB", 128)]
+
+    def test_score_panel_is_skipped_without_a_scoreboard(self):
+        canvas = FakeCanvas()
+        score_panel = FakeScorePanel()
+        board = snapshot(2, 2)
+        renderer = BoardRenderer(
+            canvas, FakeSpriteLoader(), "/assets/board.png", 64, FakeMoveLogPanel(), score_panel
+        )
+
+        renderer.render(board, move_log=[])  # move log present, but no scoreboard
+
+        assert score_panel.draw_calls == []
+
+    def test_score_panel_is_skipped_on_a_board_only_frame(self):
+        canvas = FakeCanvas()
+        score_panel = FakeScorePanel()
+        board = snapshot(2, 2)
+        renderer = BoardRenderer(
+            canvas, FakeSpriteLoader(), "/assets/board.png", 64, FakeMoveLogPanel(), score_panel
+        )
+
+        renderer.render(board, scoreboard="SB")  # no move_log -> board-only path
+
+        assert score_panel.draw_calls == []

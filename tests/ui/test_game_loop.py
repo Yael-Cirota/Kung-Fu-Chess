@@ -1,4 +1,4 @@
-from kfchess.api import BoardSnapshot, PieceView, Position
+from kfchess.api import BoardSnapshot, PieceView, Position, Scoreboard
 
 import ui.game_loop as game_loop_module
 from ui.game_loop import MAX_ENGINE_STEP_MS, run_game_loop
@@ -52,6 +52,9 @@ class FakeController:
     def move_log(self):
         return []
 
+    def scoreboard(self):
+        return Scoreboard(white=0, black=0)
+
 
 class FakeAnimator:
     def update(self, piece_id, is_moving, is_jump, now_ms):
@@ -62,7 +65,7 @@ class FakeRenderer:
     def __init__(self):
         self.render_calls = 0
 
-    def render(self, board_snapshot, visual_states, move_log=None):
+    def render(self, board_snapshot, visual_states, move_log=None, scoreboard=None):
         self.render_calls += 1
         return object()
 

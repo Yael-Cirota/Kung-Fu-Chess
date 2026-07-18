@@ -40,7 +40,7 @@ class MoveLogPanel:
 
     def __init__(
         self, width_px, bg_color, header_color, white_text_color, black_text_color,
-        font_scale, line_height_px, header_height_px, padding_px,
+        font_scale, line_height_px, header_height_px, padding_px, top_offset_px=0,
     ):
         self.width_px = width_px
         self._bg_color = bg_color
@@ -51,6 +51,9 @@ class MoveLogPanel:
         self._line_height_px = line_height_px
         self._header_height_px = header_height_px
         self._padding_px = padding_px
+        # Pixels reserved above this panel (e.g. for a score band) so its own
+        # header and columns start below whatever shares the top of the strip.
+        self._top_offset_px = top_offset_px
 
     @property
     def bg_color(self):
@@ -68,9 +71,10 @@ class MoveLogPanel:
         self._draw_column(canvas, frame, "Black", black_moves, rows, right_x, board_height_px, self._black_text_color)
 
     def _draw_column(self, canvas, frame, title, moves, rows, x, board_height_px, text_color) -> None:
-        canvas.draw_text(frame, title, x, self._header_height_px, self._font_scale, self._header_color, thickness=1)
+        header_y = self._top_offset_px + self._header_height_px
+        canvas.draw_text(frame, title, x, header_y, self._font_scale, self._header_color, thickness=1)
 
-        first_line_y = self._header_height_px + self._line_height_px
+        first_line_y = header_y + self._line_height_px
         capacity = max(0, (board_height_px - first_line_y) // self._line_height_px)
         # Keep the newest moves visible: once the column fills, show the tail.
         visible = moves[-capacity:] if capacity else []

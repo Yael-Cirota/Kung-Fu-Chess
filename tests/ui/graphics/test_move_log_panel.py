@@ -16,12 +16,12 @@ class FakeCanvas:
         self.texts.append((text, x, y, font_scale, color, thickness))
 
 
-def make_panel(width_px=200, line_height_px=20, header_height_px=30, padding_px=10):
+def make_panel(width_px=200, line_height_px=20, header_height_px=30, padding_px=10, top_offset_px=0):
     return MoveLogPanel(
         width_px=width_px, bg_color=(0, 0, 0), header_color=(1, 1, 1),
         white_text_color=(2, 2, 2), black_text_color=(3, 3, 3),
         font_scale=0.5, line_height_px=line_height_px,
-        header_height_px=header_height_px, padding_px=padding_px,
+        header_height_px=header_height_px, padding_px=padding_px, top_offset_px=top_offset_px,
     )
 
 
@@ -94,6 +94,30 @@ class TestDraw:
 
         move_texts = [t[0] for t in canvas.texts if t[0] != "White" and t[0] != "Black"]
         assert move_texts == ["3. Pc2-c3", "4. Pd2-d3"]  # newest two, still numbered 3 and 4
+
+    def test_top_offset_pushes_the_header_and_first_line_down(self):
+        canvas = FakeCanvas()
+        # top_offset 50 + header 30 -> header at y=80; first line another 20 below.
+        panel = make_panel(line_height_px=20, header_height_px=30, top_offset_px=50)
+        log = [entry("w", "wP", Position(6, 0), Position(5, 0))]
+
+        panel.draw(canvas, frame=object(), move_log=log, board_width_px=800, board_height_px=800, rows=8)
+
+        by_text = {t[0]: t for t in canvas.texts}
+        assert by_text["White"][2] == 80          # 50 offset + 30 header
+        assert by_text["1. Pa2-a3"][2] == 100      # one line height below the header
+
+    def test_top_offset_reduces_the_visible_capacity(self):
+        canvas = FakeCanvas()
+        # Without the offset this board height fits 2 lines; the 40px offset
+        # steals one line of room, leaving only the newest move visible.
+        panel = make_panel(line_height_px=20, header_height_px=30, top_offset_px=40)
+        log = [entry("w", "wP", Position(6, c), Position(5, c)) for c in range(3)]
+
+        panel.draw(canvas, frame=object(), move_log=log, board_width_px=800, board_height_px=110, rows=8)
+
+        move_texts = [t[0] for t in canvas.texts if t[0] not in ("White", "Black")]
+        assert move_texts == ["3. Pc2-c3"]
 
     def test_zero_capacity_draws_headers_only(self):
         canvas = FakeCanvas()

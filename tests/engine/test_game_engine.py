@@ -143,6 +143,107 @@ class TestMoveLog:
         assert len(engine.move_log()) == 1
 
 
+class TestScoring:
+    def test_scores_start_at_zero(self):
+        engine = make_engine(board_with())
+        assert engine.scores() == {"w": 0, "b": 0}
+
+    def test_capturing_a_pawn_credits_the_capturing_color(self):
+        rook = Piece('w', PieceKind.ROOK)
+        enemy_pawn = Piece('b', PieceKind.PAWN)
+        board = board_with(((0, 0), rook), ((0, 1), enemy_pawn))
+        engine = make_engine(board)
+
+        engine.request_move(Position(0, 0), Position(0, 1))
+        engine.wait(DEFAULT_MOVE_DELAY_MS)
+
+        assert engine.scores() == {"w": 1, "b": 0}
+
+    def test_capture_value_depends_on_the_captured_kind(self):
+        rook = Piece('b', PieceKind.ROOK)
+        enemy_queen = Piece('w', PieceKind.QUEEN)
+        board = board_with(((0, 0), rook), ((0, 1), enemy_queen))
+        engine = make_engine(board)
+
+        engine.request_move(Position(0, 0), Position(0, 1))
+        engine.wait(DEFAULT_MOVE_DELAY_MS)
+
+        assert engine.scores() == {"w": 0, "b": 9}
+
+    def test_non_capturing_move_scores_nothing(self):
+        rook = Piece('w', PieceKind.ROOK)
+        board = board_with(((4, 0), rook))
+        engine = make_engine(board)
+
+        engine.request_move(Position(4, 0), Position(4, 7))
+        engine.wait(7 * DEFAULT_MOVE_DELAY_MS)
+
+        assert engine.scores() == {"w": 0, "b": 0}
+
+    def test_scores_returns_a_copy_so_callers_cannot_mutate_state(self):
+        engine = make_engine(board_with())
+        engine.scores()["w"] = 99
+        assert engine.scores() == {"w": 0, "b": 0}
+
+    def test_king_capture_is_scored_despite_ending_the_game(self):
+        attacker = Piece('w', PieceKind.ROOK)
+        king = Piece('b', PieceKind.KING)
+        board = board_with(((0, 0), attacker), ((0, 1), king))
+        engine = make_engine(board)
+
+        engine.request_move(Position(0, 0), Position(0, 1))
+        engine.wait(DEFAULT_MOVE_DELAY_MS)
+
+        assert engine.game_over is True
+        assert engine.scores() == {"w": 10, "b": 0}
+
+    def test_capture_on_arrival_credits_the_airborne_defenders_color(self):
+        # A white rook walks onto a black bishop that is jumping in place; the
+        # arriver is the loser, so black is credited the rook's value.
+        attacker = Piece('w', PieceKind.ROOK)
+        defender = Piece('b', PieceKind.BISHOP)
+        board = board_with(((4, 3), attacker), ((4, 4), defender))
+        engine = make_engine(board)
+
+        engine.request_move(Position(4, 3), Position(4, 4))  # matures at 1000
+        engine.wait(500)
+        engine.request_move(Position(4, 4), Position(4, 4))  # defender jumps, matures at 1500
+        engine.wait(500)  # clock 1000: rook arrives while bishop still airborne
+
+        assert board.get(Position(4, 4)) is defender
+        assert engine.scores() == {"w": 0, "b": 5}
+
+    def test_capture_on_arrival_credits_white_when_black_is_the_arriver(self):
+        # Mirror of the case above with colors swapped, so the opponent-of
+        # shortcut is exercised in both directions (black arriver -> white scores).
+        attacker = Piece('b', PieceKind.ROOK)
+        defender = Piece('w', PieceKind.BISHOP)
+        board = board_with(((4, 3), attacker), ((4, 4), defender))
+        engine = make_engine(board)
+
+        engine.request_move(Position(4, 3), Position(4, 4))  # matures at 1000
+        engine.wait(500)
+        engine.request_move(Position(4, 4), Position(4, 4))  # defender jumps, matures at 1500
+        engine.wait(500)  # clock 1000: black rook arrives while bishop still airborne
+
+        assert board.get(Position(4, 4)) is defender
+        assert engine.scores() == {"w": 5, "b": 0}
+
+    def test_king_captured_on_arrival_is_scored_for_the_defender(self):
+        attacker = Piece('w', PieceKind.KING)
+        defender = Piece('b', PieceKind.ROOK)
+        board = board_with(((4, 3), attacker), ((4, 4), defender))
+        engine = make_engine(board)
+
+        engine.request_move(Position(4, 3), Position(4, 4))  # king walks in, matures at 1000
+        engine.wait(500)
+        engine.request_move(Position(4, 4), Position(4, 4))  # defender jumps, matures at 1500
+        engine.wait(500)  # clock 1000: king arrives while defender airborne
+
+        assert engine.game_over is True
+        assert engine.scores() == {"w": 0, "b": 10}
+
+
 class TestClock:
     def test_clock_ms_starts_at_zero(self):
         engine = make_engine(board_with())

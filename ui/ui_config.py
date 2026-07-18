@@ -31,3 +31,14 @@ MOVE_LOG_FONT_SCALE = 0.5
 MOVE_LOG_LINE_HEIGHT_PX = 22
 MOVE_LOG_HEADER_HEIGHT_PX = 30
 MOVE_LOG_PADDING_PX = 12
+
+# Score band, drawn at the top of the same right-hand strip (above the move
+# log, which is pushed down by SCORE_PANEL_HEIGHT_PX). Shows each player's
+# running capture-point total. Colors are BGR to match OpenCV.
+SCORE_PANEL_HEIGHT_PX = 64
+SCORE_WHITE_TEXT_COLOR = (240, 240, 240)
+SCORE_BLACK_TEXT_COLOR = (120, 200, 120)
+SCORE_FONT_SCALE = 0.7
+SCORE_LINE_HEIGHT_PX = 26
+SCORE_HEADER_HEIGHT_PX = 24
+SCORE_PADDING_PX = 12

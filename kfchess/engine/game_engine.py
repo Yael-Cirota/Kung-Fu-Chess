@@ -1,13 +1,20 @@
-from kfchess.model.piece import PieceKind
+from kfchess.model.piece import Color, PieceKind
 from kfchess.model.board import Board
 from kfchess.model.position import Position
 from kfchess.model.game_state import GameState
 from kfchess.rules.move_validation import MoveRejectionReason
 from kfchess.rules.rule_engine import RuleEngine
+from kfchess.rules.scoring import points_for
 from kfchess.realtime.real_time_arbiter import RealTimeArbiter
 from kfchess.realtime.motion import MoveOutcomeStatus
 from kfchess.engine.move_result import MoveResult
 from kfchess.engine.move_log import MoveRecord
+
+
+def _opponent_of(color: Color) -> Color:
+    """The other color - the two-player assumption that lets us name the captor
+    in a CAPTURED_ON_ARRIVAL outcome, which records only the captured piece."""
+    return Color.BLACK if color is Color.WHITE else Color.WHITE
 
 
 class GameEngine:
@@ -62,6 +69,10 @@ class GameEngine:
         """Issued moves in the order they were accepted, e.g. for kfchess.api to build a per-color log."""
         return list(self._move_log)
 
+    def scores(self):
+        """Accumulated capture points per color, e.g. for kfchess.api to build a Scoreboard."""
+        return dict(self._state.scores)
+
     def request_move(self, from_pos: Position, to_pos: Position) -> MoveResult:
         if self.game_over:
             return MoveResult.rejected(MoveRejectionReason.GAME_OVER)
@@ -92,10 +103,36 @@ class GameEngine:
         """
         outcomes = self._arbiter.advance(ms)
 
+        # Award capture points first, unconditionally: the king's own capture
+        # is one of these outcomes, so scoring it must not be gated behind the
+        # game-over short-circuit below (the final score must include it).
+        for outcome in outcomes:
+            self._award_capture_points(outcome)
+
         king_captured = any(self._is_king_captured(outcome) for outcome in outcomes)
         if king_captured:
             self.game_over = True
             self._arbiter.cancel_all_pending()
+
+    def _award_capture_points(self, outcome) -> None:
+        beneficiary, captured = self._scoring_capture(outcome)
+        if captured is not None:
+            self._state.add_score(beneficiary, points_for(captured.kind))
+
+    @staticmethod
+    def _scoring_capture(outcome):
+        """
+        (beneficiary_color, captured_piece) for a capturing outcome, else
+        (None, None). Two capture shapes with different beneficiaries:
+        - EXECUTED: the moving piece captured what stood on its target square.
+        - CAPTURED_ON_ARRIVAL: the moving piece is itself the loser, taken by
+          an airborne enemy; in a two-color game that captor is the other color.
+        """
+        if outcome.status is MoveOutcomeStatus.EXECUTED and outcome.captured_piece is not None:
+            return outcome.piece.color.value, outcome.captured_piece
+        if outcome.status is MoveOutcomeStatus.CAPTURED_ON_ARRIVAL:
+            return _opponent_of(outcome.piece.color).value, outcome.piece
+        return None, None
 
     @staticmethod
     def _is_king_captured(outcome) -> bool:

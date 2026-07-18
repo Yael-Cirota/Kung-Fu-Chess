@@ -68,6 +68,33 @@ class TestScriptRunnerRun:
         # is mid-flight on the middle square, then reaches the far square.
         assert output == ". wR .\n. . wR\n"
 
+    def test_print_scores_starts_at_zero(self):
+        vpl_input = (
+            "Board:\n"
+            "wK .\n"
+            "Commands:\n"
+            "print scores"
+        )
+
+        assert ScriptRunner().run(vpl_input) == "White: 0  Black: 0\n"
+
+    def test_print_scores_reflects_a_capture(self):
+        # wR slides two squares along the top row and takes the black pawn;
+        # a pawn is worth 1, credited to White.
+        vpl_input = (
+            "Board:\n"
+            "wR . bP\n"
+            "Commands:\n"
+            "click 50 50\n"
+            "click 250 50\n"
+            "wait 2000\n"
+            "print scores"
+        )
+
+        output = ScriptRunner().run(vpl_input)
+
+        assert output == "White: 1  Black: 0\n"
+
     def test_jump_command_requests_a_move_back_to_the_same_square(self):
         # A same-square move never mutates the board, so a broken (no-op)
         # JumpCommand handler would produce this exact output too. The

@@ -43,12 +43,17 @@ class PrintBoardCommand:
 
 
 @dataclass(frozen=True)
+class PrintScoresCommand:
+    pass
+
+
+@dataclass(frozen=True)
 class JumpCommand:
     x: int
     y: int
 
 
-ScriptCommand = Union[ClickCommand, WaitCommand, PrintBoardCommand, JumpCommand]
+ScriptCommand = Union[ClickCommand, WaitCommand, PrintBoardCommand, PrintScoresCommand, JumpCommand]
 
 
 def parse_command_line(line: str) -> Optional[ScriptCommand]:
@@ -76,6 +81,8 @@ def parse_command_line(line: str) -> Optional[ScriptCommand]:
             return None
     elif " ".join(parts) == "print board":
         return PrintBoardCommand()
+    elif " ".join(parts) == "print scores":
+        return PrintScoresCommand()
 
     return None
 

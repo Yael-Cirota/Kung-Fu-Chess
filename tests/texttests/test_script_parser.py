@@ -2,7 +2,7 @@ import pytest
 
 from kfchess.model.piece import PieceKind
 from kfchess.texttests.script_parser import (
-    ScriptParser, ClickCommand, WaitCommand, PrintBoardCommand, JumpCommand,
+    ScriptParser, ClickCommand, WaitCommand, PrintBoardCommand, PrintScoresCommand, JumpCommand,
     create_piece, parse_board_grid, parse_command_line,
 )
 
@@ -43,6 +43,9 @@ class TestParseCommandLine:
 
     def test_parse_print_board(self):
         assert parse_command_line("print board") == PrintBoardCommand()
+
+    def test_parse_print_scores(self):
+        assert parse_command_line("print scores") == PrintScoresCommand()
 
     def test_parse_empty_line(self):
         assert parse_command_line("") is None

@@ -13,6 +13,8 @@ from ui.ui_config import (
     MOVE_LOG_PANEL_WIDTH_PX, MOVE_LOG_BG_COLOR, MOVE_LOG_HEADER_COLOR,
     MOVE_LOG_WHITE_TEXT_COLOR, MOVE_LOG_BLACK_TEXT_COLOR, MOVE_LOG_FONT_SCALE,
     MOVE_LOG_LINE_HEIGHT_PX, MOVE_LOG_HEADER_HEIGHT_PX, MOVE_LOG_PADDING_PX,
+    SCORE_PANEL_HEIGHT_PX, SCORE_WHITE_TEXT_COLOR, SCORE_BLACK_TEXT_COLOR,
+    SCORE_FONT_SCALE, SCORE_LINE_HEIGHT_PX, SCORE_HEADER_HEIGHT_PX, SCORE_PADDING_PX,
 )
 from ui.animation.animation_config_loader import load_animation_configs
 from ui.animation.piece_animator import PieceAnimator
@@ -20,6 +22,7 @@ from ui.graphics.sprite_resolver import SpriteResolver
 from ui.graphics.sprite_loader import SpriteLoader
 from ui.graphics.renderer import BoardRenderer
 from ui.graphics.move_log_panel import MoveLogPanel
+from ui.graphics.score_panel import ScorePanel
 from ui.graphics.img_canvas import ImgCanvas
 from ui.app import build_visual_states
 from ui.demo_driver import FrameWriter, run_move_and_capture, write_image
@@ -39,6 +42,12 @@ STARTING_BOARD = (
 
 def cell_center_px(row: int, col: int) -> tuple:
     return col * CELL_SIZE_PX + CELL_SIZE_PX // 2, row * CELL_SIZE_PX + CELL_SIZE_PX // 2
+
+
+def print_scores(game_controller) -> None:
+    """Text dump of the running score, built from controller.api.Scoreboard rather than any kfchess type."""
+    scoreboard = game_controller.scoreboard()
+    print(f"White: {scoreboard.white}  Black: {scoreboard.black}")
 
 
 def print_board(game_controller) -> None:
@@ -65,9 +74,17 @@ def _build_scene(window_title: str):
         header_color=MOVE_LOG_HEADER_COLOR, white_text_color=MOVE_LOG_WHITE_TEXT_COLOR,
         black_text_color=MOVE_LOG_BLACK_TEXT_COLOR, font_scale=MOVE_LOG_FONT_SCALE,
         line_height_px=MOVE_LOG_LINE_HEIGHT_PX, header_height_px=MOVE_LOG_HEADER_HEIGHT_PX,
-        padding_px=MOVE_LOG_PADDING_PX,
+        padding_px=MOVE_LOG_PADDING_PX, top_offset_px=SCORE_PANEL_HEIGHT_PX,
     )
-    renderer = BoardRenderer(canvas, sprite_loader, BOARD_IMAGE_PATH, CELL_SIZE_PX, move_log_panel)
+    score_panel = ScorePanel(
+        height_px=SCORE_PANEL_HEIGHT_PX, white_text_color=SCORE_WHITE_TEXT_COLOR,
+        black_text_color=SCORE_BLACK_TEXT_COLOR, font_scale=SCORE_FONT_SCALE,
+        line_height_px=SCORE_LINE_HEIGHT_PX, header_height_px=SCORE_HEADER_HEIGHT_PX,
+        padding_px=SCORE_PADDING_PX,
+    )
+    renderer = BoardRenderer(
+        canvas, sprite_loader, BOARD_IMAGE_PATH, CELL_SIZE_PX, move_log_panel, score_panel
+    )
     return session, game_controller, animator, canvas, renderer
 
 
@@ -86,6 +103,8 @@ def main() -> None:
 
     print("\nFinal board:")
     print_board(game_controller)
+    print("\nFinal score:")
+    print_scores(game_controller)
 
 
 def run_capture_demo(show_window: bool = True) -> None:

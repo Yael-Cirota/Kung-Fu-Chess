@@ -5,6 +5,7 @@ from kfchess.api import (
     MoveLogEntry,
     PieceView,
     Position,
+    Scoreboard,
     create_game_session,
 )
 
@@ -130,3 +131,20 @@ class TestMoveLog:
         session = make_session()
         session.request_move(Position(0, 0), Position(1, 1))  # illegal rook diagonal
         assert session.move_log() == []
+
+
+class TestScoreboard:
+    def test_scoreboard_starts_at_zero(self):
+        board = make_session().scoreboard()
+        assert isinstance(board, Scoreboard)
+        assert (board.white, board.black) == (0, 0)
+
+    def test_capture_is_reflected_in_the_scoreboard(self):
+        # wR at (0,0) captures the bK at (2,0) by sliding down file a.
+        session = make_session()
+        session.request_move(Position(0, 0), Position(2, 0))
+        session.wait(2000)
+
+        board = session.scoreboard()
+        assert board.white == 10  # king value
+        assert board.black == 0

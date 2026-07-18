@@ -1,8 +1,8 @@
 from typing import List, Optional, Protocol, runtime_checkable
 
-from kfchess.api import BoardSnapshot, MotionInfo, MoveLogEntry, PieceView, Position
+from kfchess.api import BoardSnapshot, MotionInfo, MoveLogEntry, PieceView, Position, Scoreboard
 
-__all__ = ["Position", "PieceView", "BoardSnapshot", "MotionInfo", "MoveLogEntry", "GameController"]
+__all__ = ["Position", "PieceView", "BoardSnapshot", "MotionInfo", "MoveLogEntry", "Scoreboard", "GameController"]
 
 
 @runtime_checkable
@@ -30,3 +30,5 @@ class GameController(Protocol):
     def motion_for(self, piece_id: int) -> Optional[MotionInfo]: ...
 
     def move_log(self) -> List[MoveLogEntry]: ...
+
+    def scoreboard(self) -> Scoreboard: ...

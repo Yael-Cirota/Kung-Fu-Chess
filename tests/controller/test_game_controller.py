@@ -1,4 +1,4 @@
-from kfchess.api import BoardSnapshot, MotionInfo, MoveResult, PieceView, Position
+from kfchess.api import BoardSnapshot, MotionInfo, MoveResult, PieceView, Position, Scoreboard
 from controller.board_mapper import BoardMapper
 from controller.game_controller import GameController
 
@@ -10,12 +10,13 @@ def piece_view(piece_id, symbol, row, col, color="w"):
 class FakeSession:
     """Minimal stand-in for kfchess.api.GameSession to keep GameController tests unit-level."""
 
-    def __init__(self, pieces=None, next_result=None):
+    def __init__(self, pieces=None, next_result=None, scoreboard=None):
         self._pieces = dict(pieces or {})  # Position -> PieceView
         self._next_result = next_result if next_result is not None else MoveResult.accepted()
         self.request_move_calls = []
         self._motions = {}  # piece_id -> MotionInfo
         self.clock_ms = 0
+        self._scoreboard = scoreboard if scoreboard is not None else Scoreboard(white=0, black=0)
 
     def is_within_bounds(self, pos):
         return 0 <= pos.row < 8 and 0 <= pos.col < 8
@@ -48,6 +49,9 @@ class FakeSession:
 
     def move_log(self):
         return [(f, t) for f, t in self.request_move_calls]
+
+    def scoreboard(self):
+        return self._scoreboard
 
 
 def make_controller(session):
@@ -190,3 +194,10 @@ class TestPassthroughs:
         controller.on_click(750, 450)  # move to (4,7)
 
         assert controller.move_log() == [(Position(4, 0), Position(4, 7))]
+
+    def test_scoreboard_delegates_to_session(self):
+        board = Scoreboard(white=7, black=3)
+        session = FakeSession(scoreboard=board)
+        controller = make_controller(session)
+
+        assert controller.scoreboard() is board

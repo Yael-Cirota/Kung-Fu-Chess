@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from kfchess.api import engine_mapping
-from kfchess.api.dto import BoardSnapshot, MotionInfo, MoveLogEntry, PieceView
+from kfchess.api.dto import BoardSnapshot, MotionInfo, MoveLogEntry, PieceView, Scoreboard
 from kfchess.engine.move_log import MoveRecord
 from kfchess.model.piece import Piece, PieceKind
 from kfchess.model.position import Position
@@ -61,6 +61,19 @@ class TestMoveRecordToEntry:
         assert entry.symbol == 'bN'
         assert entry.from_pos == Position(0, 1)
         assert entry.to_pos == Position(2, 2)
+
+
+class TestScoreboardFromScores:
+    def test_maps_color_keyed_scores_onto_white_and_black_fields(self):
+        board = engine_mapping.scoreboard_from_scores({"w": 7, "b": 3})
+
+        assert isinstance(board, Scoreboard)
+        assert board.white == 7
+        assert board.black == 3
+
+    def test_missing_colors_default_to_zero(self):
+        board = engine_mapping.scoreboard_from_scores({})
+        assert (board.white, board.black) == (0, 0)
 
 
 class TestSnapshotFromGrid:

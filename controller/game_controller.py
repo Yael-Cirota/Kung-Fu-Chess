@@ -1,6 +1,6 @@
 from typing import Optional
 
-from kfchess.api import BoardSnapshot, GameSession, MotionInfo, Position
+from kfchess.api import BoardSnapshot, GameSession, MotionInfo, Position, Scoreboard
 
 from controller.board_mapper import BoardMapper
 
@@ -66,3 +66,6 @@ class GameController:
 
     def move_log(self):
         return self._session.move_log()
+
+    def scoreboard(self) -> Scoreboard:
+        return self._session.scoreboard()

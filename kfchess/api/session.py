@@ -1,7 +1,7 @@
 from typing import List, Optional, Protocol, runtime_checkable
 
 from kfchess.api import engine_mapping
-from kfchess.api.dto import BoardSnapshot, MotionInfo, MoveLogEntry, MoveResult, PieceView, Position
+from kfchess.api.dto import BoardSnapshot, MotionInfo, MoveLogEntry, MoveResult, PieceView, Position, Scoreboard
 from kfchess.engine.game_engine import GameEngine
 
 
@@ -34,6 +34,8 @@ class GameSession(Protocol):
     def motion_for(self, piece_id: int) -> Optional[MotionInfo]: ...
 
     def move_log(self) -> List[MoveLogEntry]: ...
+
+    def scoreboard(self) -> Scoreboard: ...
 
 
 class EngineGameSession:
@@ -85,3 +87,6 @@ class EngineGameSession:
 
     def move_log(self) -> List[MoveLogEntry]:
         return [engine_mapping.move_record_to_entry(record) for record in self._engine.move_log()]
+
+    def scoreboard(self) -> Scoreboard:
+        return engine_mapping.scoreboard_from_scores(self._engine.scores())

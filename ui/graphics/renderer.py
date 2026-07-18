@@ -21,15 +21,16 @@ class BoardRenderer:
     """
 
     def __init__(self, canvas: Canvas, sprite_loader: SpriteLoader, board_image_path: Path, cell_size_px: int,
-                 move_log_panel=None):
+                 move_log_panel=None, score_panel=None):
         self._canvas = canvas
         self._sprite_loader = sprite_loader
         self._board_image_path = Path(board_image_path)
         self._cell_size_px = cell_size_px
         self._move_log_panel = move_log_panel
+        self._score_panel = score_panel
 
     def render(self, board_snapshot, visual_states: Optional[Dict[int, PieceVisualState]] = None,
-               move_log=None) -> ImageHandle:
+               move_log=None, scoreboard=None) -> ImageHandle:
         rows, cols = board_snapshot.rows, board_snapshot.cols
         visual_states = visual_states or {}
         board_w = cols * self._cell_size_px
@@ -59,6 +60,8 @@ class BoardRenderer:
             self._canvas.blit(frame, sprite, pixel_x, pixel_y)
 
         if move_log is not None:
+            if self._score_panel is not None and scoreboard is not None:
+                self._score_panel.draw(self._canvas, frame, scoreboard, board_w)
             self._move_log_panel.draw(self._canvas, frame, move_log, board_w, board_h, rows)
 
         return frame

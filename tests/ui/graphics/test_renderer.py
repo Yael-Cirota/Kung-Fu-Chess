@@ -81,6 +81,14 @@ class FakeScorePanel:
         self.draw_calls.append((frame, scoreboard, board_width_px))
 
 
+class FakeWinnerOverlay:
+    def __init__(self):
+        self.draw_calls = []
+
+    def draw(self, canvas, frame, winner, scoreboard, board_w, board_h, elapsed_ms):
+        self.draw_calls.append((frame, winner, scoreboard, board_w, board_h, elapsed_ms))
+
+
 class FakeSpriteLoader:
     def __init__(self):
         self.requests = []
@@ -258,6 +266,61 @@ class TestScorePanel:
         renderer.render(board, scoreboard="SB")  # no move_log -> board-only path
 
         assert score_panel.draw_calls == []
+
+
+class TestWinnerOverlay:
+    def test_draws_the_overlay_with_the_board_pixel_size_when_a_winner_is_given(self):
+        canvas = FakeCanvas()
+        overlay = FakeWinnerOverlay()
+        board = snapshot(2, 2)
+        renderer = BoardRenderer(canvas, FakeSpriteLoader(), "/assets/board.png", 64, winner_overlay=overlay)
+
+        frame = renderer.render(board, scoreboard="SB", winner="w", winner_elapsed_ms=250)
+
+        assert overlay.draw_calls == [(frame, "w", "SB", 128, 128, 250)]
+
+    def test_overlay_is_skipped_without_a_winner(self):
+        canvas = FakeCanvas()
+        overlay = FakeWinnerOverlay()
+        board = snapshot(2, 2)
+        renderer = BoardRenderer(canvas, FakeSpriteLoader(), "/assets/board.png", 64, winner_overlay=overlay)
+
+        renderer.render(board)  # winner defaults to None
+
+        assert overlay.draw_calls == []
+
+    def test_overlay_is_skipped_when_no_overlay_was_configured(self):
+        canvas = FakeCanvas()
+        board = snapshot(2, 2)
+        renderer = BoardRenderer(canvas, FakeSpriteLoader(), "/assets/board.png", 64)
+
+        # Must not raise even though a winner is supplied - no overlay wired in.
+        renderer.render(board, winner="w")
+
+    def test_overlay_draws_after_the_pieces_so_it_sits_on_top(self):
+        canvas = FakeCanvas()
+        overlay = FakeWinnerOverlay()
+        rook = make_piece_view(1, "wR", row=0, col=0)
+        board = snapshot(1, 1, rook)
+        renderer = BoardRenderer(canvas, FakeSpriteLoader(), "/assets/board.png", 64, winner_overlay=overlay)
+
+        order = []
+        real_blit, real_draw = canvas.blit, overlay.draw
+
+        def spy_blit(frame, image, x, y):
+            order.append("piece")
+            return real_blit(frame, image, x, y)
+
+        def spy_draw(*a, **k):
+            order.append("overlay")
+            return real_draw(*a, **k)
+
+        canvas.blit = spy_blit
+        overlay.draw = spy_draw
+
+        renderer.render(board, winner="w")
+
+        assert order == ["piece", "overlay"]  # sprite blit, then overlay on top
 
 
 def move_entry(color, symbol, frm, to):

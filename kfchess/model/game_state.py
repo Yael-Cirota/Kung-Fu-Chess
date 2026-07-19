@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict
+from typing import Dict, Optional
 
 from kfchess.model.piece import Color
 
@@ -12,6 +12,7 @@ def _empty_scores() -> Dict[str, int]:
 class GameState:
     """Holds the small set of mutable state GameEngine owns directly."""
     game_over: bool = False
+    winner: Optional[str] = None
     scores: Dict[str, int] = field(default_factory=_empty_scores)
 
     def add_score(self, color: str, points: int) -> None:

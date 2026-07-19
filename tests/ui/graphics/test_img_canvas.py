@@ -104,6 +104,20 @@ class TestDrawText:
         assert recorded == [("White", 8, 30, 0.5, (240, 240, 240), 2)]
 
 
+class TestTextSize:
+    def test_returns_a_wider_box_for_a_longer_string(self):
+        canvas = ImgCanvas()
+        short_w, _ = canvas.text_size("Hi", 1.0)
+        long_w, _ = canvas.text_size("Hello there", 1.0)
+        assert long_w > short_w
+
+    def test_returns_a_taller_box_for_a_larger_font_scale(self):
+        canvas = ImgCanvas()
+        _, small_h = canvas.text_size("Wins!", 0.5)
+        _, big_h = canvas.text_size("Wins!", 2.0)
+        assert big_h > small_h
+
+
 class TestFillRect:
     def test_delegates_to_the_frame_fill_rect(self):
         canvas = ImgCanvas()

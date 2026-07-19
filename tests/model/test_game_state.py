@@ -10,6 +10,14 @@ class TestGameState:
         state.game_over = True
         assert state.game_over is True
 
+    def test_winner_defaults_to_none(self):
+        assert GameState().winner is None
+
+    def test_winner_is_mutable(self):
+        state = GameState()
+        state.winner = "w"
+        assert state.winner == "w"
+
     def test_scores_default_to_zero_per_color(self):
         assert GameState().scores == {"w": 0, "b": 0}
 

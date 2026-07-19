@@ -17,6 +17,11 @@ from ui.ui_config import (
     BOARD_SHOW_COORDINATES, BOARD_COORDINATE_COLOR, BOARD_COORDINATE_FONT_SCALE,
     BOARD_COORDINATE_THICKNESS, BOARD_COORDINATE_MARGIN_PX,
     BOARD_COORDINATE_OUTLINE_COLOR, BOARD_COORDINATE_OUTLINE_THICKNESS,
+    WINNER_DISPLAY_DURATION_MS, WINNER_BACKDROP_COLOR, WINNER_BACKDROP_MAX_ALPHA, WINNER_FADE_IN_MS,
+    WINNER_TITLE_WHITE_COLOR, WINNER_TITLE_BLACK_COLOR, WINNER_TITLE_BASE_FONT_SCALE,
+    WINNER_TITLE_PULSE_AMPLITUDE, WINNER_TITLE_PULSE_PERIOD_MS, WINNER_TITLE_THICKNESS,
+    WINNER_SUBTITLE_COLOR, WINNER_SUBTITLE_FONT_SCALE, WINNER_SUBTITLE_THICKNESS,
+    WINNER_TITLE_TO_SUBTITLE_GAP_PX,
 )
 from ui.animation.animation_config_loader import load_animation_configs
 from ui.animation.piece_animator import PieceAnimator
@@ -26,12 +31,13 @@ from ui.graphics.renderer import BoardRenderer
 from ui.graphics.move_log_panel import MoveLogPanel
 from ui.graphics.score_panel import ScorePanel
 from ui.graphics.board_theme import BoardTheme
+from ui.graphics.winner_overlay import WinnerOverlay
 from ui.graphics.img_canvas import ImgCanvas
 from ui.app import build_visual_states
 from ui.board_geometry import BoardGeometry
 from ui.click_handler import ClickHandler
 from ui.demo_driver import FrameWriter, run_move_and_capture, write_image
-from ui.game_loop import run_game_loop
+from ui.game_loop import run_game_loop, run_winner_screen
 
 STARTING_BOARD = (
     "bR bN bB bQ bK bB bN bR\n"
@@ -95,8 +101,18 @@ def _build_scene(window_title: str):
         coordinate_outline_color=BOARD_COORDINATE_OUTLINE_COLOR,
         coordinate_outline_thickness=BOARD_COORDINATE_OUTLINE_THICKNESS,
     )
+    winner_overlay = WinnerOverlay(
+        backdrop_color=WINNER_BACKDROP_COLOR, backdrop_max_alpha=WINNER_BACKDROP_MAX_ALPHA,
+        fade_in_ms=WINNER_FADE_IN_MS, title_white_color=WINNER_TITLE_WHITE_COLOR,
+        title_black_color=WINNER_TITLE_BLACK_COLOR, title_base_font_scale=WINNER_TITLE_BASE_FONT_SCALE,
+        title_pulse_amplitude=WINNER_TITLE_PULSE_AMPLITUDE, title_pulse_period_ms=WINNER_TITLE_PULSE_PERIOD_MS,
+        title_thickness=WINNER_TITLE_THICKNESS, subtitle_color=WINNER_SUBTITLE_COLOR,
+        subtitle_font_scale=WINNER_SUBTITLE_FONT_SCALE, subtitle_thickness=WINNER_SUBTITLE_THICKNESS,
+        title_to_subtitle_gap_px=WINNER_TITLE_TO_SUBTITLE_GAP_PX,
+    )
     renderer = BoardRenderer(
-        canvas, sprite_loader, BOARD_IMAGE_PATH, CELL_SIZE_PX, move_log_panel, score_panel, board_theme
+        canvas, sprite_loader, BOARD_IMAGE_PATH, CELL_SIZE_PX, move_log_panel, score_panel, board_theme,
+        winner_overlay,
     )
     return session, click_handler, animator, canvas, renderer
 
@@ -111,6 +127,8 @@ def main() -> None:
 
     try:
         run_game_loop(canvas, session, click_handler, animator, renderer, CELL_SIZE_PX)
+        if session.game_over:
+            run_winner_screen(canvas, session, renderer, WINNER_DISPLAY_DURATION_MS)
     finally:
         canvas.close()
 

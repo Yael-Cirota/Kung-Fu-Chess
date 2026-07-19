@@ -332,6 +332,48 @@ class TestGameOver:
         assert engine.is_moving(bystander) is False
 
 
+class TestWinner:
+    def test_winner_is_none_while_the_game_is_on(self):
+        engine = make_engine(board_with())
+        assert engine.winner is None
+
+    def test_winner_is_the_capturing_color_when_the_king_is_taken_on_arrival(self):
+        attacker = Piece('w', PieceKind.ROOK)
+        king = Piece('b', PieceKind.KING)
+        board = board_with(((0, 0), attacker), ((0, 1), king))
+        engine = make_engine(board)
+
+        engine.request_move(Position(0, 0), Position(0, 1))
+        engine.wait(DEFAULT_MOVE_DELAY_MS)
+
+        assert engine.winner == 'w'
+
+    def test_winner_is_the_defending_color_when_its_king_captures_the_arriver(self):
+        attacker = Piece('w', PieceKind.KING)
+        defender = Piece('b', PieceKind.ROOK)
+        board = board_with(((4, 3), attacker), ((4, 4), defender))
+        engine = make_engine(board)
+
+        engine.request_move(Position(4, 3), Position(4, 4))  # king walks in, matures at 1000
+        engine.wait(500)
+        engine.request_move(Position(4, 4), Position(4, 4))  # defender jumps, matures at 1500
+        engine.wait(500)  # clock 1000: king arrives while defender airborne
+
+        assert engine.game_over is True
+        assert engine.winner == 'b'
+
+    def test_winner_stays_none_when_a_non_king_is_captured(self):
+        attacker = Piece('w', PieceKind.ROOK)
+        enemy = Piece('b', PieceKind.PAWN)
+        board = board_with(((0, 0), attacker), ((0, 1), enemy))
+        engine = make_engine(board)
+
+        engine.request_move(Position(0, 0), Position(0, 1))
+        engine.wait(DEFAULT_MOVE_DELAY_MS)
+
+        assert engine.winner is None
+
+
 class TestJump:
     def test_jump_request_is_legal_and_lands_after_jump_duration(self):
         rook = Piece('w', PieceKind.ROOK)

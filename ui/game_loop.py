@@ -64,3 +64,33 @@ def run_game_loop(
         )
 
         running = canvas.show(rendered, delay_ms=frame_delay_ms)
+
+
+def run_winner_screen(
+    canvas, session, renderer, duration_ms,
+    fps: int = DEFAULT_FRAMES_PER_SECOND, clock=time.monotonic,
+) -> None:
+    """
+    Holds the final frame on screen with a winner banner animating over it, for
+    up to `duration_ms` of wall-clock time (early-exits the moment `show`
+    reports quit). Called once `run_game_loop` has already stopped because
+    `session.game_over` is true - the board/move log/scoreboard/winner are
+    all frozen by then, so they're read once rather than every frame.
+    """
+    board_snapshot = session.board_snapshot()
+    move_log = session.move_log()
+    scoreboard = session.scoreboard()
+    winner = session.winner
+
+    frame_delay_ms = max(1, round(MS_IN_SECOND / fps))
+    start = clock()
+
+    running = True
+    elapsed_ms = 0
+    while running and elapsed_ms < duration_ms:
+        elapsed_ms = round((clock() - start) * MS_IN_SECOND)
+        rendered = renderer.render(
+            board_snapshot, move_log=move_log, scoreboard=scoreboard,
+            winner=winner, winner_elapsed_ms=elapsed_ms,
+        )
+        running = canvas.show(rendered, delay_ms=frame_delay_ms)

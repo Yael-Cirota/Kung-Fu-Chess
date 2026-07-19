@@ -55,3 +55,21 @@ BOARD_COORDINATE_THICKNESS = 1
 BOARD_COORDINATE_MARGIN_PX = 5
 BOARD_COORDINATE_OUTLINE_COLOR = (30, 30, 30)  # BGR: near-black halo for contrast
 BOARD_COORDINATE_OUTLINE_THICKNESS = 3
+
+# Winner overlay, shown over the board once the game ends. Timed off the wall
+# clock, so it keeps animating even though the engine clock is frozen at that
+# point. Colors are BGR to match OpenCV.
+WINNER_DISPLAY_DURATION_MS = 4500
+WINNER_BACKDROP_COLOR = (20, 20, 20)       # BGR: near-black wash
+WINNER_BACKDROP_MAX_ALPHA = 0.65
+WINNER_FADE_IN_MS = 400
+WINNER_TITLE_WHITE_COLOR = (245, 245, 245)  # BGR: near-white
+WINNER_TITLE_BLACK_COLOR = (120, 200, 120)  # BGR: soft green, matches the black move-log column
+WINNER_TITLE_BASE_FONT_SCALE = 1.6
+WINNER_TITLE_PULSE_AMPLITUDE = 0.08
+WINNER_TITLE_PULSE_PERIOD_MS = 1400
+WINNER_TITLE_THICKNESS = 3
+WINNER_SUBTITLE_COLOR = (210, 210, 210)
+WINNER_SUBTITLE_FONT_SCALE = 0.8
+WINNER_SUBTITLE_THICKNESS = 2
+WINNER_TITLE_TO_SUBTITLE_GAP_PX = 46

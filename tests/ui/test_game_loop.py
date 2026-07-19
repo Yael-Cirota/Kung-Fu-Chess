@@ -1,7 +1,7 @@
 from kfchess.api import BoardSnapshot, PieceView, Position, Scoreboard
 
 import ui.game_loop as game_loop_module
-from ui.game_loop import MAX_ENGINE_STEP_MS, run_game_loop
+from ui.game_loop import MAX_ENGINE_STEP_MS, run_game_loop, run_winner_screen
 from ui.ui_config import CELL_SIZE_PX
 
 
@@ -27,9 +27,10 @@ class FakeClickHandler:
 
 
 class FakeSession:
-    def __init__(self, game_over_after_frames=None):
+    def __init__(self, game_over_after_frames=None, winner=None):
         self.clock_ms = 0
         self.advances = []
+        self.winner = winner
         self._piece = PieceView(piece_id=1, symbol="wP", color="w", cell=Position(6, 4))
         self._game_over_after = game_over_after_frames
         self._frame_checks = 0
@@ -68,9 +69,12 @@ class FakeAnimator:
 class FakeRenderer:
     def __init__(self):
         self.render_calls = 0
+        self.render_args = []
 
-    def render(self, board_snapshot, visual_states, move_log=None, scoreboard=None):
+    def render(self, board_snapshot, visual_states=None, move_log=None, scoreboard=None,
+               winner=None, winner_elapsed_ms=0):
         self.render_calls += 1
+        self.render_args.append((board_snapshot, visual_states, move_log, scoreboard, winner, winner_elapsed_ms))
         return object()
 
 
@@ -198,3 +202,69 @@ class TestRunGameLoop:
 
         assert recorded["render_ms"] == 40  # wall clock
         assert recorded["engine_ms"] == session.clock_ms == 40  # engine clock, read after advance
+
+
+class TestRunWinnerScreen:
+    def test_reads_the_frozen_game_state_once_and_renders_it_every_frame(self):
+        session = FakeSession(winner="w")
+        renderer = FakeRenderer()
+        canvas = FakeCanvas(show_results=[True, True, False])
+
+        run_winner_screen(
+            canvas, session, renderer, duration_ms=1000,
+            clock=FakeClock([0.0, 0.01, 0.02, 0.03]),
+        )
+
+        assert renderer.render_calls == 3
+        for _board, _visual, _log, _score, winner, _elapsed in renderer.render_args:
+            assert winner == "w"
+
+    def test_passes_increasing_elapsed_wall_time_to_render(self):
+        session = FakeSession(winner="b")
+        renderer = FakeRenderer()
+        canvas = FakeCanvas(show_results=[True, False])
+
+        run_winner_screen(
+            canvas, session, renderer, duration_ms=1000,
+            clock=FakeClock([0.0, 0.050, 0.120]),
+        )
+
+        elapsed_values = [args[5] for args in renderer.render_args]
+        assert elapsed_values == [50, 120]
+
+    def test_stops_once_the_duration_elapses(self):
+        session = FakeSession(winner="w")
+        renderer = FakeRenderer()
+        canvas = FakeCanvas(show_results=[True, True, True, True])
+
+        run_winner_screen(
+            canvas, session, renderer, duration_ms=100,
+            clock=FakeClock([0.0, 0.04, 0.09, 0.15, 0.20]),
+        )
+
+        # Frames render while elapsed_ms < 100; the 0.15s frame (150ms) ends the loop.
+        assert renderer.render_calls == 3
+
+    def test_stops_early_when_show_reports_quit(self):
+        session = FakeSession(winner="w")
+        renderer = FakeRenderer()
+        canvas = FakeCanvas(show_results=[True, False])
+
+        run_winner_screen(
+            canvas, session, renderer, duration_ms=10000,
+            clock=FakeClock([0.0, 0.01, 0.02]),
+        )
+
+        assert renderer.render_calls == 2
+
+    def test_never_advances_the_engine_clock(self):
+        session = FakeSession(winner="w")
+        renderer = FakeRenderer()
+        canvas = FakeCanvas(show_results=[True, False])
+
+        run_winner_screen(
+            canvas, session, renderer, duration_ms=1000,
+            clock=FakeClock([0.0, 0.01, 0.02]),
+        )
+
+        assert session.advances == []

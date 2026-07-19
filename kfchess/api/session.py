@@ -19,6 +19,9 @@ class GameSession(Protocol):
     @property
     def game_over(self) -> bool: ...
 
+    @property
+    def winner(self) -> Optional[str]: ...
+
     def is_within_bounds(self, pos: Position) -> bool: ...
 
     def piece_at(self, pos: Position) -> Optional[PieceView]: ...
@@ -57,6 +60,10 @@ class EngineGameSession:
     @property
     def game_over(self) -> bool:
         return self._engine.game_over
+
+    @property
+    def winner(self) -> Optional[str]:
+        return self._engine.winner
 
     def is_within_bounds(self, pos: Position) -> bool:
         return self._engine.is_within_bounds(pos)

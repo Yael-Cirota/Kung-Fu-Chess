@@ -45,6 +45,11 @@ class GameEngine:
         self._state.game_over = value
 
     @property
+    def winner(self):
+        """The color that captured the enemy king, or None while the game is still on."""
+        return self._state.winner
+
+    @property
     def clock_ms(self) -> int:
         return self._arbiter.clock_ms
 
@@ -109,8 +114,9 @@ class GameEngine:
         for outcome in outcomes:
             self._award_capture_points(outcome)
 
-        king_captured = any(self._is_king_captured(outcome) for outcome in outcomes)
-        if king_captured:
+        king_capture = next((o for o in outcomes if self._is_king_captured(o)), None)
+        if king_capture is not None:
+            self._state.winner = self._scoring_capture(king_capture)[0]
             self.game_over = True
             self._arbiter.cancel_all_pending()
 

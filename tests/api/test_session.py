@@ -32,6 +32,19 @@ class TestClockAndGameOver:
         assert make_session().game_over is False
 
 
+class TestWinner:
+    def test_winner_is_none_before_the_game_ends(self):
+        assert make_session().winner is None
+
+    def test_winner_is_set_once_the_king_is_captured(self):
+        session = make_session()
+        session.request_move(Position(0, 0), Position(2, 0))  # rook captures the king
+        session.wait(5000)
+
+        assert session.game_over is True
+        assert session.winner == "w"
+
+
 class TestBounds:
     def test_in_bounds_position(self):
         assert make_session().is_within_bounds(Position(1, 1)) is True

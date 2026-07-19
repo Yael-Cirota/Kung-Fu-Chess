@@ -43,6 +43,12 @@ class ImgCanvas:
     def draw_text(self, frame: Img, text, x, y, font_scale, color, thickness=1) -> None:
         frame.put_text(text, x, y, font_scale, color=color, thickness=thickness)
 
+    def text_size(self, text, font_scale, thickness=1):
+        """(width, height) in pixels of `text` at `font_scale`, matching draw_text's font -
+        lets a caller center text without ever touching cv2 itself."""
+        (width, height), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
+        return width, height
+
     def fill_rect(self, frame: Img, x, y, w, h, color, alpha=1.0) -> None:
         frame.fill_rect(x, y, w, h, color, alpha=alpha)
 

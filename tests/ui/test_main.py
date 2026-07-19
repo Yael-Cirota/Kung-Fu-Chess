@@ -58,6 +58,22 @@ class TestMain:
 
         assert fake_cv2.destroy_window_calls == ["Kung-Fu-Chess"]
 
+    def test_shows_the_winner_screen_once_the_game_ends(self, monkeypatch):
+        import ui.graphics.img_canvas as img_canvas_module
+
+        def fake_run_game_loop(canvas, session, click_handler, animator, renderer, cell_size_px):
+            # Stand in for a king capture ending the game inside run_game_loop.
+            session._engine.game_over = True
+
+        monkeypatch.setattr(main_module, "run_game_loop", fake_run_game_loop)
+        # waitKey returns 'q', so the winner screen's first show() also quits immediately.
+        fake_cv2 = FakeWindowCv2(wait_key_return=ord("q"))
+        monkeypatch.setattr(img_canvas_module, "cv2", fake_cv2)
+
+        main()
+
+        assert fake_cv2.destroy_window_calls == ["Kung-Fu-Chess"]
+
 
 class TestRunCaptureDemo:
     def test_runs_full_demo_without_a_window_and_writes_output_files(self, tmp_path, monkeypatch):

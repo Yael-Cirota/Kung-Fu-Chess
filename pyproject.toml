@@ -17,28 +17,17 @@ dev = [
 testpaths = ["tests"]
 
 [tool.importlinter]
-root_packages = ["kfchess", "controller", "ui"]
+root_packages = ["kfchess", "ui"]
 
 [[tool.importlinter.contracts]]
-name = "Layers: ui -> controller -> kfchess"
+name = "Layers: ui -> kfchess"
 type = "layers"
-layers = ["ui", "controller", "kfchess"]
+layers = ["ui", "kfchess"]
 
 [[tool.importlinter.contracts]]
-name = "ui only crosses into controller.api"
+name = "ui only crosses into kfchess.api"
 type = "forbidden"
 source_modules = ["ui"]
-forbidden_modules = ["kfchess"]
-allow_indirect_imports = true
-# ui/main.py is the graphics demo's composition root (the repo-root main.py
-# is already the graded text-scripting entry point), so it is the one
-# permitted exception that wires kfchess.api directly to controller/ui.
-ignore_imports = ["ui.main -> kfchess.api"]
-
-[[tool.importlinter.contracts]]
-name = "controller only crosses into kfchess.api"
-type = "forbidden"
-source_modules = ["controller"]
 forbidden_modules = [
     "kfchess.model", "kfchess.rules", "kfchess.realtime",
     "kfchess.engine", "kfchess.input", "kfchess.io", "kfchess.texttests",

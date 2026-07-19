@@ -5,8 +5,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from kfchess.api import Position, create_game_session
 
-from controller.factory import build_game_controller
-
 from ui.ui_config import (
     CELL_SIZE_PX, BOARD_IMAGE_PATH, PIECES_DIR, SPRITE_STATE, SPRITE_FRAME_FILENAME,
     RENDERED_BOARD_OUTPUT_PATH, ANIMATION_FRAMES_OUTPUT_DIR,
@@ -30,6 +28,8 @@ from ui.graphics.score_panel import ScorePanel
 from ui.graphics.board_theme import BoardTheme
 from ui.graphics.img_canvas import ImgCanvas
 from ui.app import build_visual_states
+from ui.board_geometry import BoardGeometry
+from ui.click_handler import ClickHandler
 from ui.demo_driver import FrameWriter, run_move_and_capture, write_image
 from ui.game_loop import run_game_loop
 
@@ -46,18 +46,18 @@ STARTING_BOARD = (
 
 
 def cell_center_px(row: int, col: int) -> tuple:
-    return col * CELL_SIZE_PX + CELL_SIZE_PX // 2, row * CELL_SIZE_PX + CELL_SIZE_PX // 2
+    return BoardGeometry(CELL_SIZE_PX).cell_center(Position(row, col))
 
 
-def print_scores(game_controller) -> None:
-    """Text dump of the running score, built from controller.api.Scoreboard rather than any kfchess type."""
-    scoreboard = game_controller.scoreboard()
+def print_scores(session) -> None:
+    """Text dump of the running score, built from a kfchess.api Scoreboard DTO."""
+    scoreboard = session.scoreboard()
     print(f"White: {scoreboard.white}  Black: {scoreboard.black}")
 
 
-def print_board(game_controller) -> None:
-    """Text dump of the current board, built from controller.api.BoardSnapshot rather than any kfchess type."""
-    snapshot = game_controller.board_snapshot()
+def print_board(session) -> None:
+    """Text dump of the current board, built from a kfchess.api BoardSnapshot DTO."""
+    snapshot = session.board_snapshot()
     grid = [["." for _ in range(snapshot.cols)] for _ in range(snapshot.rows)]
     for piece_view in snapshot.pieces():
         grid[piece_view.cell.row][piece_view.cell.col] = piece_view.symbol
@@ -66,9 +66,9 @@ def print_board(game_controller) -> None:
 
 
 def _build_scene(window_title: str):
-    """Wires the full render/controller/animation stack, returning the pieces both entry points share."""
+    """Wires the full render/input/animation stack, returning the pieces both entry points share."""
     session = create_game_session(STARTING_BOARD)
-    game_controller = build_game_controller(session, cell_size_px=CELL_SIZE_PX)
+    click_handler = ClickHandler(session, BoardGeometry(CELL_SIZE_PX))
     animator = PieceAnimator(load_animation_configs(PIECES_DIR))
 
     canvas = ImgCanvas(window_title)
@@ -98,76 +98,76 @@ def _build_scene(window_title: str):
     renderer = BoardRenderer(
         canvas, sprite_loader, BOARD_IMAGE_PATH, CELL_SIZE_PX, move_log_panel, score_panel, board_theme
     )
-    return session, game_controller, animator, canvas, renderer
+    return session, click_handler, animator, canvas, renderer
 
 
 def main() -> None:
     """Real interactive game: a human clicks pieces in the live window to play in real time."""
-    _, game_controller, animator, canvas, renderer = _build_scene("Kung-Fu-Chess")
+    session, click_handler, animator, canvas, renderer = _build_scene("Kung-Fu-Chess")
 
     print("Starting board:")
-    print_board(game_controller)
+    print_board(session)
     print("\nClick a piece, then its destination. Press Esc or q to quit.")
 
     try:
-        run_game_loop(canvas, game_controller, animator, renderer, CELL_SIZE_PX)
+        run_game_loop(canvas, session, click_handler, animator, renderer, CELL_SIZE_PX)
     finally:
         canvas.close()
 
     print("\nFinal board:")
-    print_board(game_controller)
+    print_board(session)
     print("\nFinal score:")
-    print_scores(game_controller)
+    print_scores(session)
 
 
 def run_capture_demo(show_window: bool = True) -> None:
     """Deterministic scripted demo: plays two fixed opening moves and captures every tick to disk."""
-    _, game_controller, animator, canvas, renderer = _build_scene("Kung-Fu-Chess - Stage 4 motion demo")
+    session, click_handler, animator, canvas, renderer = _build_scene("Kung-Fu-Chess - Stage 4 motion demo")
     live_canvas = canvas if show_window else None
 
     ANIMATION_FRAMES_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     frame_writer = FrameWriter(canvas, ANIMATION_FRAMES_OUTPUT_DIR)
 
     print("Starting board:")
-    print_board(game_controller)
+    print_board(session)
 
     try:
         # White pawn opening move: e2-e4, a 2-cell slide (row 6,col4 -> row 4,col4).
-        pawn = game_controller.piece_at(Position(6, 4))
+        pawn = session.piece_at(Position(6, 4))
         select_x, select_y = cell_center_px(6, 4)
         dest_x, dest_y = cell_center_px(4, 4)
-        game_controller.on_click(select_x, select_y)
-        game_controller.on_click(dest_x, dest_y)
+        click_handler.on_click(select_x, select_y)
+        click_handler.on_click(dest_x, dest_y)
         run_move_and_capture(
-            game_controller, animator, renderer, frame_writer, pawn.piece_id,
+            session, animator, renderer, frame_writer, pawn.piece_id,
             "pawn slide (2 cells)", CELL_SIZE_PX, live_canvas,
         )
 
         print("\nBoard after the pawn's opening move:")
-        print_board(game_controller)
+        print_board(session)
 
         # White knight opening move: Nb1-c3 (row 7,col1 -> row 5,col2) - exercises
         # the "jump" animation, since JumpingProfile is what covers a knight move.
-        knight = game_controller.piece_at(Position(7, 1))
+        knight = session.piece_at(Position(7, 1))
         select_x, select_y = cell_center_px(7, 1)
         dest_x, dest_y = cell_center_px(5, 2)
-        game_controller.on_click(select_x, select_y)
-        game_controller.on_click(dest_x, dest_y)
+        click_handler.on_click(select_x, select_y)
+        click_handler.on_click(dest_x, dest_y)
         run_move_and_capture(
-            game_controller, animator, renderer, frame_writer, knight.piece_id,
+            session, animator, renderer, frame_writer, knight.piece_id,
             "knight jump", CELL_SIZE_PX, live_canvas,
         )
 
         print("\nBoard after the knight's opening move:")
-        print_board(game_controller)
+        print_board(session)
     finally:
         canvas.close()
 
     rendered = renderer.render(
-        game_controller.board_snapshot(),
+        session.board_snapshot(),
         build_visual_states(
-            game_controller, animator,
-            engine_ms=game_controller.clock_ms, render_ms=game_controller.clock_ms,
+            session, animator,
+            engine_ms=session.clock_ms, render_ms=session.clock_ms,
             cell_size_px=CELL_SIZE_PX,
         ),
     )

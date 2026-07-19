@@ -14,8 +14,8 @@ passant are intentionally out of scope. See `README.md` for the full ruleset.
 The codebase is a **strictly layered stack**, top to bottom:
 
 ```
-ui/          Graphics/animation demo: OpenCV rendering, sprite animation, frame capture
-controller/  Pixel-click -> board-command translation (GameController)
+ui/          Graphics/animation demo: OpenCV rendering, sprite animation, frame
+             capture, plus ClickHandler (pixel-click -> board-command translation)
 kfchess/     The headless engine (the domain core)
   api/         Public boundary of the engine: Protocols + DTOs + factory
   engine/      GameEngine - application command boundary (request_move, wait, game_over)
@@ -35,8 +35,11 @@ types.** Every boundary is crossed through a `Protocol` and immutable DTOs:
 - `kfchess.api` re-exports `Position`, `PieceView`, `BoardSnapshot`,
   `MotionInfo`, `MoveResult`, and the `GameSession` Protocol. Nothing outside
   `kfchess` ever imports a `kfchess.model.Piece` or a `kfchess`-internal enum.
-- `controller.api` exposes the `GameController` Protocol and re-exports those
-  same DTOs, so `ui` never imports `kfchess` at all.
+- `ui` depends on `kfchess.api` and nothing deeper: it holds `GameSession` and
+  the DTOs, never a live engine object. `ui/click_handler.py` owns the only two
+  inherently client-side concerns - pixel->cell geometry and the per-player
+  select/reselect/move state machine - and calls `session.request_move`
+  directly. There is no delegating wrapper layer in between.
 - `ui/graphics/canvas.py` defines a `Canvas` Protocol that is the **only**
   seam allowed to touch OpenCV/`Img`; everything else in `ui` depends on the
   Protocol, not on `cv2`.
@@ -55,12 +58,11 @@ for DTO translation.
 
 ## 3. Coding Standards & Best Practices
 
-- **Respect the layering.** `import-linter` enforces `ui -> controller ->
-  kfchess`, and forbids each layer from reaching past the target's `.api`
-  package (see `[tool.importlinter]` in `pyproject.toml`). If you add a
-  cross-layer import, it must go through the appropriate `api`/Protocol seam,
-  or the contract check fails. The only sanctioned exception is
-  `ui/main.py -> kfchess.api` (the graphics demo's composition root).
+- **Respect the layering.** `import-linter` enforces `ui -> kfchess` and
+  forbids `ui` from reaching past `kfchess.api` into any engine internals
+  (see `[tool.importlinter]` in `pyproject.toml`). If you add a cross-layer
+  import, it must go through the `kfchess.api` Protocol seam, or the contract
+  check fails.
 - **Never leak internal types across a boundary.** Add fields to the DTOs in
   `kfchess/api/dto.py` and translate in `engine_mapping`/`api/*_mapping.py`;
   do not pass live `model` objects outward.
@@ -116,8 +118,8 @@ pip install -e . --group dev      # or: pip install pytest coverage import-linte
 
 - **Two entry points, different purposes.** Repo-root `main.py` is the graded
   VPL text-scripting harness. `ui/main.py` is a self-contained graphics demo
-  and is the *only* place permitted to wire `kfchess.api` directly to
-  `controller`/`ui`. Do not merge or cross-wire them.
+  and is the composition root that wires `kfchess.api` to the `ui` stack.
+  Do not merge or cross-wire them.
 - **VPL DSL:** the deterministic scripting format (`Board:` + `Commands:` with
   `click`, `jump`, `wait`, `print board`) documented in `README.md`. It exists
   so games can be driven and asserted without rendering or timing flakiness;
@@ -132,7 +134,7 @@ pip install -e . --group dev      # or: pip install pytest coverage import-linte
   durations live in `kfchess/realtime/` (`cooldown.py`, `movement_profile.py`).
 - **When adding a feature that crosses layers,** the usual shape is: extend the
   DTO in `kfchess/api/dto.py`, populate it in the relevant `*_mapping` module,
-  widen the `GameSession`/`GameController` Protocol, then consume it in `ui`.
+  widen the `GameSession` Protocol, then consume it in `ui`.
   Run `lint-imports` and `pytest` before considering it done.
 - **Sprite assets** live under `ui/assets/pieces1|pieces2/<PIECE>/states/<state>/`
   with per-state `config.json`. Reskinning is a one-line change of `PIECES_DIR`

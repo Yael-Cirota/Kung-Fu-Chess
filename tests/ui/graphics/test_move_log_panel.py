@@ -1,4 +1,4 @@
-from controller.api import MoveLogEntry, Position
+from kfchess.api import MoveLogEntry, Position
 from ui.graphics.move_log_panel import MoveLogPanel, format_move, square_name
 
 

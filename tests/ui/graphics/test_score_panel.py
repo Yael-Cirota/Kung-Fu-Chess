@@ -1,4 +1,4 @@
-from controller.api import Scoreboard
+from kfchess.api import Scoreboard
 from ui.graphics.score_panel import ScorePanel, format_score
 
 

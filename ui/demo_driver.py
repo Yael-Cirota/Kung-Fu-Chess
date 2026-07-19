@@ -31,47 +31,47 @@ def write_image(canvas, path, rendered) -> None:
 
 
 def run_move_and_capture(
-    game_controller, animator, renderer, frame_writer, piece_id, label, cell_size_px,
+    session, animator, renderer, frame_writer, piece_id, label, cell_size_px,
     live_canvas=None, tick_ms=40, reporter=print,
 ):
     """
     Steps simulated time forward in small ticks - rendering, saving (via
     `frame_writer`), and (if a `live_canvas` was supplied) live-displaying a
     frame each tick - until the piece identified by `piece_id` (whose move was
-    already requested via the controller's clicks) has finished moving and
+    already requested via the click handler) has finished moving and
     settled back into an idle-bound rest animation. Reports pixel position
     and animation state/frame each tick through `reporter` so the glide can
     also be verified without a live window.
     """
-    if game_controller.motion_for(piece_id) is None:
+    if session.motion_for(piece_id) is None:
         reporter(f"\n[{label}] move was not accepted (no motion recorded for this piece)")
         return
 
     settle_ticks_remaining = 10  # keep capturing briefly after arrival to show the rest animation
     while True:
-        game_controller.advance(tick_ms)
+        session.wait(tick_ms)
         # Deterministic capture path: both clocks collapse onto the engine
         # clock so a headless run is fully reproducible (no wall time leaks in).
         visual_states = build_visual_states(
-            game_controller, animator,
-            engine_ms=game_controller.clock_ms, render_ms=game_controller.clock_ms,
+            session, animator,
+            engine_ms=session.clock_ms, render_ms=session.clock_ms,
             cell_size_px=cell_size_px,
         )
 
         visual = visual_states.get(piece_id)
         reporter(
-            f"  t={game_controller.clock_ms:5d}ms  pixel=({visual.pixel_x:6.1f},{visual.pixel_y:6.1f})  "
+            f"  t={session.clock_ms:5d}ms  pixel=({visual.pixel_x:6.1f},{visual.pixel_y:6.1f})  "
             f"state={visual.sprite_state:<10s} frame={visual.frame_index}"
         )
 
-        rendered = renderer.render(game_controller.board_snapshot(), visual_states)
+        rendered = renderer.render(session.board_snapshot(), visual_states)
         frame_writer.write(rendered)
 
         if live_canvas is not None:
             if not live_canvas.show(rendered, delay_ms=tick_ms):
                 return
 
-        if game_controller.motion_for(piece_id) is None:
+        if session.motion_for(piece_id) is None:
             settle_ticks_remaining -= 1
             if settle_ticks_remaining <= 0:
                 break

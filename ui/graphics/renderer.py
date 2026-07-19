@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Dict, Optional
 
+from ui.board_geometry import BoardGeometry
 from ui.graphics.canvas import Canvas, ImageHandle
 from ui.graphics.piece_visual_state import PieceVisualState
 from ui.graphics.sprite_loader import SpriteLoader
@@ -17,7 +18,9 @@ class BoardRenderer:
     (sprite_state, frame_index) are supplied by the caller via
     `visual_states` (keyed by piece_id); a piece absent from that mapping
     falls back to its resting cell position and the static idle sprite,
-    exactly as in Stage 2/3.
+    exactly as in Stage 2/3. Cell<->pixel conversion is delegated to a
+    BoardGeometry so this class, ClickHandler, and build_visual_states all
+    agree on one implementation rather than each doing its own multiply.
     """
 
     def __init__(self, canvas: Canvas, sprite_loader: SpriteLoader, board_image_path: Path, cell_size_px: int,
@@ -26,6 +29,7 @@ class BoardRenderer:
         self._sprite_loader = sprite_loader
         self._board_image_path = Path(board_image_path)
         self._cell_size_px = cell_size_px
+        self._geometry = BoardGeometry(cell_size_px)
         self._move_log_panel = move_log_panel
         self._score_panel = score_panel
         # Optional cosmetic overlays (last-move highlight, coordinate labels).
@@ -63,8 +67,7 @@ class BoardRenderer:
                 pixel_x, pixel_y = int(visual.pixel_x), int(visual.pixel_y)
                 sprite = self._sprite_loader.get(piece_view.symbol, visual.sprite_state, visual.frame_index)
             else:
-                pixel_x = piece_view.cell.col * self._cell_size_px
-                pixel_y = piece_view.cell.row * self._cell_size_px
+                pixel_x, pixel_y = self._geometry.cell_to_pixel(piece_view.cell)
                 sprite = self._sprite_loader.get(piece_view.symbol)
 
             self._canvas.blit(frame, sprite, pixel_x, pixel_y)
@@ -83,9 +86,9 @@ class BoardRenderer:
             return
         last = move_log[-1]
         for pos in (last.from_pos, last.to_pos):
+            x, y = self._geometry.cell_to_pixel(pos)
             self._canvas.fill_rect(
-                frame, pos.col * self._cell_size_px, pos.row * self._cell_size_px,
-                self._cell_size_px, self._cell_size_px,
+                frame, x, y, self._cell_size_px, self._cell_size_px,
                 theme.last_move_color, alpha=theme.last_move_alpha,
             )
 

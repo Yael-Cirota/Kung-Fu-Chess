@@ -1,5 +1,6 @@
 from kfchess.api import BoardSnapshot, MotionInfo, PieceView, Position
-from ui.app import build_visual_states, cell_top_left_px
+from ui.app import build_visual_states
+from ui.board_geometry import BoardGeometry
 from ui.ui_config import CELL_SIZE_PX
 
 
@@ -28,14 +29,6 @@ class FakeAnimator:
         return ("some_state", 1)
 
 
-class TestCellTopLeftPx:
-    def test_top_left_of_origin_cell(self):
-        assert cell_top_left_px(Position(0, 0), CELL_SIZE_PX) == (0, 0)
-
-    def test_scales_by_cell_size(self):
-        assert cell_top_left_px(Position(2, 3), CELL_SIZE_PX) == (3 * CELL_SIZE_PX, 2 * CELL_SIZE_PX)
-
-
 class TestBuildVisualStates:
     def test_stationary_piece_uses_its_resting_cell(self):
         piece = piece_view(1, row=1, col=1)
@@ -47,7 +40,7 @@ class TestBuildVisualStates:
         )
 
         visual = visuals[1]
-        assert (visual.pixel_x, visual.pixel_y) == cell_top_left_px(Position(1, 1), CELL_SIZE_PX)
+        assert (visual.pixel_x, visual.pixel_y) == BoardGeometry(CELL_SIZE_PX).cell_to_pixel(Position(1, 1))
         # The animator (cosmetic frames) is driven by the render/wall clock, not the engine clock.
         assert animator.calls == [(1, False, False, 7000)]
 
@@ -64,8 +57,8 @@ class TestBuildVisualStates:
         )
 
         visual = visuals[1]
-        from_x, from_y = cell_top_left_px(Position(4, 0), CELL_SIZE_PX)
-        to_x, to_y = cell_top_left_px(Position(4, 2), CELL_SIZE_PX)
+        from_x, from_y = BoardGeometry(CELL_SIZE_PX).cell_to_pixel(Position(4, 0))
+        to_x, to_y = BoardGeometry(CELL_SIZE_PX).cell_to_pixel(Position(4, 2))
         assert visual.pixel_x == (from_x + to_x) / 2
         assert visual.pixel_y == (from_y + to_y) / 2
         # ...while the animator still sees the render clock.
@@ -83,8 +76,8 @@ class TestBuildVisualStates:
             controller, animator, engine_ms=250, render_ms=250, cell_size_px=CELL_SIZE_PX
         )
 
-        _from_x, _ = cell_top_left_px(Position(0, 0), CELL_SIZE_PX)
-        to_x, _ = cell_top_left_px(Position(0, 4), CELL_SIZE_PX)
+        _from_x, _ = BoardGeometry(CELL_SIZE_PX).cell_to_pixel(Position(0, 0))
+        to_x, _ = BoardGeometry(CELL_SIZE_PX).cell_to_pixel(Position(0, 4))
         assert visuals[1].pixel_x == 0.15625 * to_x  # eased, not 0.25 * to_x
 
     def test_moving_piece_forwards_is_jump_flag(self):

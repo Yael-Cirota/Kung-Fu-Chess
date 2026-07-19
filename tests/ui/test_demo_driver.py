@@ -10,8 +10,8 @@ class FakeAnimator:
         return ("some_state", 1)
 
 
-class FakeGameController:
-    """Single-piece stand-in for controller.api.GameController, keyed by piece_id 1."""
+class FakeSession:
+    """Single-piece stand-in for kfchess.api.GameSession, keyed by piece_id 1."""
 
     def __init__(self, moving_until_ms=None, motion=None):
         self.clock_ms = 0
@@ -19,7 +19,7 @@ class FakeGameController:
         self._moving_until_ms = moving_until_ms
         self._motion = motion
 
-    def advance(self, ms):
+    def wait(self, ms):
         self.clock_ms += ms
 
     def motion_for(self, piece_id):
@@ -98,12 +98,12 @@ class TestWriteImage:
 
 class TestRunMoveAndCapture:
     def test_returns_immediately_when_move_was_not_accepted(self):
-        controller = FakeGameController()  # motion_for always returns None
+        session = FakeSession()  # motion_for always returns None
         renderer = FakeRenderer()
         frame_writer = FakeFrameWriter()
 
         run_move_and_capture(
-            controller, FakeAnimator(), renderer, frame_writer, piece_id=1,
+            session, FakeAnimator(), renderer, frame_writer, piece_id=1,
             label="label", cell_size_px=CELL_SIZE_PX, reporter=silent,
         )
 
@@ -112,12 +112,12 @@ class TestRunMoveAndCapture:
 
     def test_captures_frames_until_piece_settles(self):
         motion = MotionInfo(from_pos=Position(4, 0), to_pos=Position(4, 2), start_ms=0, duration_ms=1000, is_jump=False)
-        controller = FakeGameController(moving_until_ms=80, motion=motion)
+        session = FakeSession(moving_until_ms=80, motion=motion)
         renderer = FakeRenderer()
         frame_writer = FakeFrameWriter()
 
         run_move_and_capture(
-            controller, FakeAnimator(), renderer, frame_writer, piece_id=1,
+            session, FakeAnimator(), renderer, frame_writer, piece_id=1,
             label="label", cell_size_px=CELL_SIZE_PX, tick_ms=40, reporter=silent,
         )
 
@@ -127,13 +127,13 @@ class TestRunMoveAndCapture:
 
     def test_stops_early_when_live_canvas_reports_quit(self):
         motion = MotionInfo(from_pos=Position(4, 0), to_pos=Position(4, 2), start_ms=0, duration_ms=100_000, is_jump=False)
-        controller = FakeGameController(moving_until_ms=1_000_000, motion=motion)  # never settles on its own
+        session = FakeSession(moving_until_ms=1_000_000, motion=motion)  # never settles on its own
         renderer = FakeRenderer()
         frame_writer = FakeFrameWriter()
         live_canvas = FakeCanvas(show_results=[False])
 
         run_move_and_capture(
-            controller, FakeAnimator(), renderer, frame_writer, piece_id=1,
+            session, FakeAnimator(), renderer, frame_writer, piece_id=1,
             label="label", cell_size_px=CELL_SIZE_PX, live_canvas=live_canvas, tick_ms=40, reporter=silent,
         )
 

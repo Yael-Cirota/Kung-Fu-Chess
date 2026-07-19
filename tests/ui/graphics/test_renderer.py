@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from controller.api import BoardSnapshot, MoveLogEntry, PieceView, Position
+from kfchess.api import BoardSnapshot, MoveLogEntry, PieceView, Position
 from ui.graphics.board_theme import BoardTheme
 from ui.graphics.piece_visual_state import PieceVisualState
 from ui.graphics.renderer import BoardRenderer

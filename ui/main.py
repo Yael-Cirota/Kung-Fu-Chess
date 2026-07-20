@@ -14,6 +14,7 @@ from ui.ui_config import (
     SCORE_PANEL_HEIGHT_PX, SCORE_WHITE_TEXT_COLOR, SCORE_BLACK_TEXT_COLOR,
     SCORE_FONT_SCALE, SCORE_LINE_HEIGHT_PX, SCORE_HEADER_HEIGHT_PX, SCORE_PADDING_PX,
     BOARD_HIGHLIGHT_LAST_MOVE, BOARD_LAST_MOVE_COLOR, BOARD_LAST_MOVE_ALPHA,
+    BOARD_HIGHLIGHT_SELECTED, BOARD_SELECTED_COLOR, BOARD_SELECTED_ALPHA,
     BOARD_SHOW_COORDINATES, BOARD_COORDINATE_COLOR, BOARD_COORDINATE_FONT_SCALE,
     BOARD_COORDINATE_THICKNESS, BOARD_COORDINATE_MARGIN_PX,
     BOARD_COORDINATE_OUTLINE_COLOR, BOARD_COORDINATE_OUTLINE_THICKNESS,
@@ -22,7 +23,9 @@ from ui.ui_config import (
     WINNER_TITLE_PULSE_AMPLITUDE, WINNER_TITLE_PULSE_PERIOD_MS, WINNER_TITLE_THICKNESS,
     WINNER_SUBTITLE_COLOR, WINNER_SUBTITLE_FONT_SCALE, WINNER_SUBTITLE_THICKNESS,
     WINNER_TITLE_TO_SUBTITLE_GAP_PX,
+    MOVE_SOUND_PATH, CAPTURE_SOUND_PATH, WIN_SOUND_PATH,
 )
+from ui.audio.winsound_sound_board import WinsoundSoundBoard
 from ui.animation.animation_config_loader import load_animation_configs
 from ui.animation.piece_animator import PieceAnimator
 from ui.graphics.sprite_resolver import SpriteResolver
@@ -95,7 +98,9 @@ def _build_scene(window_title: str):
     )
     board_theme = BoardTheme(
         highlight_last_move=BOARD_HIGHLIGHT_LAST_MOVE, last_move_color=BOARD_LAST_MOVE_COLOR,
-        last_move_alpha=BOARD_LAST_MOVE_ALPHA, show_coordinates=BOARD_SHOW_COORDINATES,
+        last_move_alpha=BOARD_LAST_MOVE_ALPHA,
+        highlight_selected=BOARD_HIGHLIGHT_SELECTED, selected_color=BOARD_SELECTED_COLOR,
+        selected_alpha=BOARD_SELECTED_ALPHA, show_coordinates=BOARD_SHOW_COORDINATES,
         coordinate_color=BOARD_COORDINATE_COLOR, coordinate_font_scale=BOARD_COORDINATE_FONT_SCALE,
         coordinate_thickness=BOARD_COORDINATE_THICKNESS, coordinate_margin_px=BOARD_COORDINATE_MARGIN_PX,
         coordinate_outline_color=BOARD_COORDINATE_OUTLINE_COLOR,
@@ -114,21 +119,24 @@ def _build_scene(window_title: str):
         canvas, sprite_loader, BOARD_IMAGE_PATH, CELL_SIZE_PX, move_log_panel, score_panel, board_theme,
         winner_overlay,
     )
-    return session, click_handler, animator, canvas, renderer
+    sound_board = WinsoundSoundBoard({
+        "move": MOVE_SOUND_PATH, "capture": CAPTURE_SOUND_PATH, "win": WIN_SOUND_PATH,
+    })
+    return session, click_handler, animator, canvas, renderer, sound_board
 
 
 def main() -> None:
     """Real interactive game: a human clicks pieces in the live window to play in real time."""
-    session, click_handler, animator, canvas, renderer = _build_scene("Kung-Fu-Chess")
+    session, click_handler, animator, canvas, renderer, sound_board = _build_scene("Kung-Fu-Chess")
 
     print("Starting board:")
     print_board(session)
     print("\nClick a piece, then its destination. Press Esc or q to quit.")
 
     try:
-        run_game_loop(canvas, session, click_handler, animator, renderer, CELL_SIZE_PX)
+        run_game_loop(canvas, session, click_handler, animator, renderer, CELL_SIZE_PX, sound_board=sound_board)
         if session.game_over:
-            run_winner_screen(canvas, session, renderer, WINNER_DISPLAY_DURATION_MS)
+            run_winner_screen(canvas, session, renderer, WINNER_DISPLAY_DURATION_MS, sound_board=sound_board)
     finally:
         canvas.close()
 
@@ -140,7 +148,9 @@ def main() -> None:
 
 def run_capture_demo(show_window: bool = True) -> None:
     """Deterministic scripted demo: plays two fixed opening moves and captures every tick to disk."""
-    session, click_handler, animator, canvas, renderer = _build_scene("Kung-Fu-Chess - Stage 4 motion demo")
+    session, click_handler, animator, canvas, renderer, _sound_board = _build_scene(
+        "Kung-Fu-Chess - Stage 4 motion demo"
+    )
     live_canvas = canvas if show_window else None
 
     ANIMATION_FRAMES_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -188,6 +198,7 @@ def run_capture_demo(show_window: bool = True) -> None:
             engine_ms=session.clock_ms, render_ms=session.clock_ms,
             cell_size_px=CELL_SIZE_PX,
         ),
+        selected=click_handler.selected,
     )
     write_image(canvas, RENDERED_BOARD_OUTPUT_PATH, rendered)
     print(f"\nRendered board image saved to: {RENDERED_BOARD_OUTPUT_PATH}")

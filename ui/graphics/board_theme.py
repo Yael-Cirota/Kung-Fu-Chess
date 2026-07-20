@@ -21,6 +21,14 @@ class BoardTheme:
     last_move_color: Tuple[int, int, int] = (90, 200, 130)  # BGR: soft green
     last_move_alpha: float = 0.30
 
+    # Translucent wash over the cell of whichever piece the player currently
+    # has selected, so the selection stays visibly marked until the piece
+    # moves or is deselected - independent of (and drawn over) the last-move
+    # wash above.
+    highlight_selected: bool = True
+    selected_color: Tuple[int, int, int] = (60, 170, 250)  # BGR: warm amber
+    selected_alpha: float = 0.35
+
     # File letters (a-h) along the bottom edge and rank numbers (1-8) down the
     # left edge, drawn small in the cell corners so they never cover a sprite.
     show_coordinates: bool = True

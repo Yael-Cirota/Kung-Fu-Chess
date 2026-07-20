@@ -19,8 +19,9 @@ class FakeClock:
 
 
 class FakeClickHandler:
-    def __init__(self):
+    def __init__(self, selected=None):
         self.clicks = []
+        self.selected = selected
 
     def on_click(self, x, y):
         self.clicks.append((x, y))
@@ -66,15 +67,25 @@ class FakeAnimator:
         return ("idle", 0)
 
 
+class FakeSoundBoard:
+    def __init__(self):
+        self.played = []
+
+    def play(self, name):
+        self.played.append(name)
+
+
 class FakeRenderer:
     def __init__(self):
         self.render_calls = 0
         self.render_args = []
 
     def render(self, board_snapshot, visual_states=None, move_log=None, scoreboard=None,
-               winner=None, winner_elapsed_ms=0):
+               winner=None, winner_elapsed_ms=0, selected=None):
         self.render_calls += 1
-        self.render_args.append((board_snapshot, visual_states, move_log, scoreboard, winner, winner_elapsed_ms))
+        self.render_args.append(
+            (board_snapshot, visual_states, move_log, scoreboard, winner, winner_elapsed_ms, selected)
+        )
         return object()
 
 
@@ -182,6 +193,44 @@ class TestRunGameLoop:
 
         assert canvas.shows[0][1] == 20  # 1000 / 50
 
+    def test_does_not_touch_audio_when_no_sound_board_is_given(self, monkeypatch):
+        session, click_handler = FakeSession(), FakeClickHandler()
+        canvas = FakeCanvas(show_results=[True, False])
+
+        class ExplodingAudioTracker:
+            def __init__(self, *args, **kwargs):
+                raise AssertionError("GameAudioTracker must not be built without a sound_board")
+
+        monkeypatch.setattr(game_loop_module, "GameAudioTracker", ExplodingAudioTracker)
+
+        run_game_loop(
+            canvas, session, click_handler, FakeAnimator(), FakeRenderer(), CELL_SIZE_PX,
+            clock=FakeClock([0.0, 0.01, 0.02]),
+        )  # must not raise
+
+    def test_updates_the_audio_tracker_every_frame_when_a_sound_board_is_given(self, monkeypatch):
+        session, click_handler = FakeSession(), FakeClickHandler()
+        canvas = FakeCanvas(show_results=[True, True, False])
+        sound_board = FakeSoundBoard()
+        updates = []
+
+        class SpyAudioTracker:
+            def __init__(self, given_sound_board):
+                assert given_sound_board is sound_board
+
+            def update(self, board_snapshot, motion_for):
+                updates.append((board_snapshot, motion_for))
+
+        monkeypatch.setattr(game_loop_module, "GameAudioTracker", SpyAudioTracker)
+
+        run_game_loop(
+            canvas, session, click_handler, FakeAnimator(), FakeRenderer(), CELL_SIZE_PX,
+            clock=FakeClock([0.0, 0.01, 0.02, 0.03]), sound_board=sound_board,
+        )
+
+        assert len(updates) == 3
+        assert updates[0][1] == session.motion_for
+
     def test_routes_the_two_clocks_to_build_visual_states(self, monkeypatch):
         session, click_handler = FakeSession(), FakeClickHandler()
         canvas = FakeCanvas(show_results=[False])
@@ -203,6 +252,19 @@ class TestRunGameLoop:
         assert recorded["render_ms"] == 40  # wall clock
         assert recorded["engine_ms"] == session.clock_ms == 40  # engine clock, read after advance
 
+    def test_passes_the_click_handlers_current_selection_to_render(self):
+        session = FakeSession()
+        click_handler = FakeClickHandler(selected=Position(6, 4))
+        canvas = FakeCanvas(show_results=[False])
+        renderer = FakeRenderer()
+
+        run_game_loop(
+            canvas, session, click_handler, FakeAnimator(), renderer, CELL_SIZE_PX,
+            clock=FakeClock([0.0, 0.0]),
+        )
+
+        assert renderer.render_args[0][6] == Position(6, 4)
+
 
 class TestRunWinnerScreen:
     def test_reads_the_frozen_game_state_once_and_renders_it_every_frame(self):
@@ -216,7 +278,7 @@ class TestRunWinnerScreen:
         )
 
         assert renderer.render_calls == 3
-        for _board, _visual, _log, _score, winner, _elapsed in renderer.render_args:
+        for _board, _visual, _log, _score, winner, _elapsed, _selected in renderer.render_args:
             assert winner == "w"
 
     def test_passes_increasing_elapsed_wall_time_to_render(self):
@@ -268,3 +330,26 @@ class TestRunWinnerScreen:
         )
 
         assert session.advances == []
+
+    def test_plays_the_win_sound_once_when_a_sound_board_is_given(self):
+        session = FakeSession(winner="w")
+        renderer = FakeRenderer()
+        canvas = FakeCanvas(show_results=[True, True, False])
+        sound_board = FakeSoundBoard()
+
+        run_winner_screen(
+            canvas, session, renderer, duration_ms=1000,
+            clock=FakeClock([0.0, 0.01, 0.02, 0.03]), sound_board=sound_board,
+        )
+
+        assert sound_board.played == ["win"]
+
+    def test_does_not_touch_audio_when_no_sound_board_is_given(self):
+        session = FakeSession(winner="w")
+        renderer = FakeRenderer()
+        canvas = FakeCanvas(show_results=[True, False])
+
+        run_winner_screen(
+            canvas, session, renderer, duration_ms=1000,
+            clock=FakeClock([0.0, 0.01, 0.02]),
+        )  # must not raise

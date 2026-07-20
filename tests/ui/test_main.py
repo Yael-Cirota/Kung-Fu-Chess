@@ -49,6 +49,11 @@ class FakeWindowCv2:
 class TestMain:
     def test_runs_the_interactive_loop_and_closes_the_window_on_quit(self, monkeypatch):
         import ui.graphics.img_canvas as img_canvas_module
+        import ui.audio.winsound_sound_board as winsound_sound_board_module
+
+        # No real audio device in a test run: silence WinsoundSoundBoard the
+        # same way FakeWindowCv2 stands in for cv2.
+        monkeypatch.setattr(winsound_sound_board_module, "winsound", None)
 
         # waitKey returns 'q', so the first show() reports quit and the loop exits after one frame.
         fake_cv2 = FakeWindowCv2(wait_key_return=ord("q"))
@@ -60,8 +65,11 @@ class TestMain:
 
     def test_shows_the_winner_screen_once_the_game_ends(self, monkeypatch):
         import ui.graphics.img_canvas as img_canvas_module
+        import ui.audio.winsound_sound_board as winsound_sound_board_module
 
-        def fake_run_game_loop(canvas, session, click_handler, animator, renderer, cell_size_px):
+        monkeypatch.setattr(winsound_sound_board_module, "winsound", None)
+
+        def fake_run_game_loop(canvas, session, click_handler, animator, renderer, cell_size_px, sound_board=None):
             # Stand in for a king capture ending the game inside run_game_loop.
             session._engine.game_over = True
 

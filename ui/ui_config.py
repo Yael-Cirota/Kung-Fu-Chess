@@ -18,6 +18,12 @@ SPRITE_FRAME_FILENAME = "1.png"          # which frame of that state
 RENDERED_BOARD_OUTPUT_PATH = UI_DIR / "rendered_board.png"
 ANIMATION_FRAMES_OUTPUT_DIR = UI_DIR / "frames"
 
+# Sound effects, keyed by the names GameAudioTracker/main.py play() calls use.
+SOUNDS_DIR = ASSETS_DIR / "sounds"
+MOVE_SOUND_PATH = SOUNDS_DIR / "move.wav"
+CAPTURE_SOUND_PATH = SOUNDS_DIR / "capture.wav"
+WIN_SOUND_PATH = SOUNDS_DIR / "win.wav"
+
 # Move-log side panel (drawn to the right of the board so board pixels - and
 # therefore click-to-cell mapping - stay at the origin, unchanged). Colors are
 # BGR to match OpenCV. The panel splits into a White column and a Black column
@@ -43,11 +49,18 @@ SCORE_LINE_HEIGHT_PX = 26
 SCORE_HEADER_HEIGHT_PX = 24
 SCORE_PADDING_PX = 12
 
-# Cosmetic board overlays (last-move highlight + edge coordinate labels). These
-# draw only *over* the board pixels, never shifting geometry or click mapping.
-BOARD_HIGHLIGHT_LAST_MOVE = True
+# Cosmetic board overlays (last-move highlight, selected-piece highlight,
+# edge coordinate labels). These draw only *over* the board pixels, never
+# shifting geometry or click mapping.
+# Off by default: a piece's cell should only stay marked while it is the
+# active selection (see BOARD_HIGHLIGHT_SELECTED below), not linger green
+# after the move has already landed.
+BOARD_HIGHLIGHT_LAST_MOVE = False
 BOARD_LAST_MOVE_COLOR = (90, 200, 130)   # BGR: soft green
 BOARD_LAST_MOVE_ALPHA = 0.30
+BOARD_HIGHLIGHT_SELECTED = True
+BOARD_SELECTED_COLOR = (60, 170, 250)    # BGR: warm amber
+BOARD_SELECTED_ALPHA = 0.35
 BOARD_SHOW_COORDINATES = True
 BOARD_COORDINATE_COLOR = (230, 230, 230)  # BGR: near-white glyph
 BOARD_COORDINATE_FONT_SCALE = 0.38

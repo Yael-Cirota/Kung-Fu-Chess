@@ -39,7 +39,7 @@ class BoardRenderer:
         self._winner_overlay = winner_overlay
 
     def render(self, board_snapshot, visual_states: Optional[Dict[int, PieceVisualState]] = None,
-               move_log=None, scoreboard=None, winner=None, winner_elapsed_ms=0) -> ImageHandle:
+               move_log=None, scoreboard=None, winner=None, winner_elapsed_ms=0, selected=None) -> ImageHandle:
         rows, cols = board_snapshot.rows, board_snapshot.cols
         visual_states = visual_states or {}
         board_w = cols * self._cell_size_px
@@ -60,6 +60,7 @@ class BoardRenderer:
         # sprite always rides on top of its highlight, never under it.
         if self._board_theme is not None:
             self._draw_last_move_highlight(frame, move_log)
+            self._draw_selected_highlight(frame, selected)
             self._draw_coordinates(frame, rows, cols, board_h)
 
         for piece_view in board_snapshot.pieces():
@@ -97,6 +98,17 @@ class BoardRenderer:
                 frame, x, y, self._cell_size_px, self._cell_size_px,
                 theme.last_move_color, alpha=theme.last_move_alpha,
             )
+
+    def _draw_selected_highlight(self, frame, selected) -> None:
+        """Washes the cell of the currently selected piece, drawn every frame it stays selected."""
+        theme = self._board_theme
+        if not theme.highlight_selected or selected is None:
+            return
+        x, y = self._geometry.cell_to_pixel(selected)
+        self._canvas.fill_rect(
+            frame, x, y, self._cell_size_px, self._cell_size_px,
+            theme.selected_color, alpha=theme.selected_alpha,
+        )
 
     def _draw_coordinates(self, frame, rows, cols, board_h) -> None:
         """File letters along the bottom edge and rank numbers down the left edge."""

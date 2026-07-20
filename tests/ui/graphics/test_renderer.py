@@ -474,3 +474,72 @@ class TestBoardThemeLastMoveHighlight:
         renderer.render(board, move_log=[move_entry("w", "wP", Position(6, 0), Position(5, 0))])
 
         assert order == ["fill", "fill", "piece"]
+
+
+class TestBoardThemeSelectedHighlight:
+    def test_highlights_the_selected_cell(self):
+        canvas = FakeCanvas()
+        board = snapshot(8, 8)
+        theme = BoardTheme(show_coordinates=False, highlight_last_move=False,
+                            selected_color=(60, 170, 250), selected_alpha=0.35)
+        renderer = BoardRenderer(canvas, FakeSpriteLoader(), "/assets/board.png", 64, board_theme=theme)
+
+        renderer.render(board, selected=Position(2, 3))
+
+        assert canvas.fills == [(3 * 64, 2 * 64, 64, 64, (60, 170, 250), 0.35)]
+
+    def test_no_highlight_when_nothing_is_selected(self):
+        canvas = FakeCanvas()
+        board = snapshot(8, 8)
+        theme = BoardTheme(show_coordinates=False, highlight_last_move=False)
+        renderer = BoardRenderer(canvas, FakeSpriteLoader(), "/assets/board.png", 64, board_theme=theme)
+
+        renderer.render(board)  # selected defaults to None
+
+        assert canvas.fills == []
+
+    def test_highlight_can_be_disabled(self):
+        canvas = FakeCanvas()
+        board = snapshot(8, 8)
+        theme = BoardTheme(show_coordinates=False, highlight_last_move=False, highlight_selected=False)
+        renderer = BoardRenderer(canvas, FakeSpriteLoader(), "/assets/board.png", 64, board_theme=theme)
+
+        renderer.render(board, selected=Position(0, 0))
+
+        assert canvas.fills == []
+
+    def test_selected_highlight_sits_under_the_pieces(self):
+        canvas = FakeCanvas()
+        pawn = make_piece_view(1, "wP", row=2, col=3)
+        board = snapshot(8, 8, pawn)
+        theme = BoardTheme(show_coordinates=False, highlight_last_move=False)
+        renderer = BoardRenderer(canvas, FakeSpriteLoader(), "/assets/board.png", 64, board_theme=theme)
+
+        order = []
+        real_fill, real_blit = canvas.fill_rect, canvas.blit
+
+        def spy_fill(*a, **k):
+            order.append("fill")
+            return real_fill(*a, **k)
+
+        def spy_blit(frame, image, x, y):
+            if image == "sprite:wP":
+                order.append("piece")
+            return real_blit(frame, image, x, y)
+
+        canvas.fill_rect = spy_fill
+        canvas.blit = spy_blit
+
+        renderer.render(board, selected=Position(2, 3))
+
+        assert order == ["fill", "piece"]
+
+    def test_no_highlight_without_a_board_theme(self):
+        canvas = FakeCanvas()
+        board = snapshot(8, 8)
+        renderer = BoardRenderer(canvas, FakeSpriteLoader(), "/assets/board.png", 64)
+
+        # Must not raise even though a selection is supplied - no theme wired in.
+        renderer.render(board, selected=Position(0, 0))
+
+        assert canvas.fills == []

@@ -23,6 +23,7 @@ The "two clocks" separation is the whole point of this module:
 import time
 
 from ui.app import build_visual_states
+from ui.audio.game_audio import GameAudioTracker
 
 DEFAULT_FRAMES_PER_SECOND = 60
 
@@ -37,10 +38,11 @@ MS_IN_SECOND = 1000
 
 def run_game_loop(
     canvas, session, click_handler, animator, renderer, cell_size_px,
-    fps: int = DEFAULT_FRAMES_PER_SECOND, clock=time.monotonic,
+    fps: int = DEFAULT_FRAMES_PER_SECOND, clock=time.monotonic, sound_board=None,
 ) -> None:
     frame_delay_ms = max(1, round(MS_IN_SECOND / fps))
     start = clock()
+    audio_tracker = GameAudioTracker(sound_board) if sound_board is not None else None
 
     running = True
     while running and not session.game_over:
@@ -58,9 +60,13 @@ def run_game_loop(
             render_ms=render_ms,
             cell_size_px=cell_size_px,
         )
+        board_snapshot = session.board_snapshot()
+        if audio_tracker is not None:
+            audio_tracker.update(board_snapshot, session.motion_for)
         rendered = renderer.render(
-            session.board_snapshot(), visual_states,
+            board_snapshot, visual_states,
             move_log=session.move_log(), scoreboard=session.scoreboard(),
+            selected=click_handler.selected,
         )
 
         running = canvas.show(rendered, delay_ms=frame_delay_ms)
@@ -68,7 +74,7 @@ def run_game_loop(
 
 def run_winner_screen(
     canvas, session, renderer, duration_ms,
-    fps: int = DEFAULT_FRAMES_PER_SECOND, clock=time.monotonic,
+    fps: int = DEFAULT_FRAMES_PER_SECOND, clock=time.monotonic, sound_board=None,
 ) -> None:
     """
     Holds the final frame on screen with a winner banner animating over it, for
@@ -81,6 +87,9 @@ def run_winner_screen(
     move_log = session.move_log()
     scoreboard = session.scoreboard()
     winner = session.winner
+
+    if sound_board is not None:
+        sound_board.play("win")
 
     frame_delay_ms = max(1, round(MS_IN_SECOND / fps))
     start = clock()

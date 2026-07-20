@@ -49,6 +49,7 @@ class FakeWindowCv2:
 class TestMain:
     def test_runs_the_interactive_loop_and_closes_the_window_on_quit(self, monkeypatch):
         import ui.graphics.img_canvas as img_canvas_module
+        import ui.graphics.mouse_input as mouse_input_module
         import ui.audio.winsound_sound_board as winsound_sound_board_module
 
         # No real audio device in a test run: silence WinsoundSoundBoard the
@@ -58,6 +59,7 @@ class TestMain:
         # waitKey returns 'q', so the first show() reports quit and the loop exits after one frame.
         fake_cv2 = FakeWindowCv2(wait_key_return=ord("q"))
         monkeypatch.setattr(img_canvas_module, "cv2", fake_cv2)
+        monkeypatch.setattr(mouse_input_module, "cv2", fake_cv2)
 
         main()
 
@@ -65,6 +67,7 @@ class TestMain:
 
     def test_shows_the_winner_screen_once_the_game_ends(self, monkeypatch):
         import ui.graphics.img_canvas as img_canvas_module
+        import ui.graphics.mouse_input as mouse_input_module
         import ui.audio.winsound_sound_board as winsound_sound_board_module
 
         monkeypatch.setattr(winsound_sound_board_module, "winsound", None)
@@ -77,6 +80,7 @@ class TestMain:
         # waitKey returns 'q', so the winner screen's first show() also quits immediately.
         fake_cv2 = FakeWindowCv2(wait_key_return=ord("q"))
         monkeypatch.setattr(img_canvas_module, "cv2", fake_cv2)
+        monkeypatch.setattr(mouse_input_module, "cv2", fake_cv2)
 
         main()
 
@@ -98,6 +102,7 @@ class TestRunCaptureDemo:
 
     def test_runs_with_a_window_and_closes_it_when_done(self, tmp_path, monkeypatch):
         import ui.graphics.img_canvas as img_canvas_module
+        import ui.graphics.mouse_input as mouse_input_module
 
         frames_dir = tmp_path / "frames"
         board_path = tmp_path / "rendered_board.png"
@@ -105,6 +110,7 @@ class TestRunCaptureDemo:
         monkeypatch.setattr(main_module, "RENDERED_BOARD_OUTPUT_PATH", board_path)
         fake_cv2 = FakeWindowCv2()
         monkeypatch.setattr(img_canvas_module, "cv2", fake_cv2)
+        monkeypatch.setattr(mouse_input_module, "cv2", fake_cv2)
 
         run_capture_demo(show_window=True)
 

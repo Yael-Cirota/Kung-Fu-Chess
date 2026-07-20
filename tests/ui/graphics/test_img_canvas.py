@@ -1,6 +1,7 @@
 import numpy as np
 
 import ui.graphics.img_canvas as img_canvas_module
+import ui.graphics.mouse_input as mouse_input_module
 from ui.graphics.img_canvas import ImgCanvas
 from ui.img import Img
 
@@ -55,6 +56,7 @@ class FakeCv2:
 def install_fake_cv2(monkeypatch, wait_key_return=ord("a"), window_visible=1.0, destroy_raises=False):
     fake_cv2 = FakeCv2(wait_key_return, window_visible, destroy_raises)
     monkeypatch.setattr(img_canvas_module, "cv2", fake_cv2)
+    monkeypatch.setattr(mouse_input_module, "cv2", fake_cv2)
     return fake_cv2
 
 

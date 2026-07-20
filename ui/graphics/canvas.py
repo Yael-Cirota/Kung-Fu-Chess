@@ -15,8 +15,9 @@ class Canvas(Protocol):
     """
     The single seam that keeps cv2/Img out of the rest of ui. Every module in
     ui/graphics, ui/animation, and ui/app depends on this Protocol instead of
-    importing Img (or cv2) directly; the concrete ImgCanvas is the only
-    ui-side object that actually touches OpenCV pixels and windows.
+    importing Img (or cv2) directly; the concrete ImgCanvas (backed by
+    MouseInput for raw click capture) is the only ui-side object that
+    actually touches OpenCV pixels, windows, and input events.
 
     Deliberately *stateless*: load_image/blit/show/save each take the frame
     they operate on explicitly, matching how BoardRenderer.render already

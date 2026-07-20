@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 
+from ui.graphics.mouse_input import MouseInput
 from ui.img import Img
 
 
@@ -17,17 +18,16 @@ class ImgCanvas:
     all - which is why a single class covers both the interactive demo and
     the offscreen render path.
 
-    It is also the ui's single source of real human input: when the window is
-    opened it installs an OpenCV mouse callback that buffers left-button
-    clicks (in image-pixel space) for the game loop to drain each frame. This
-    keeps cv2's event model - like its pixels and windows - from leaking
-    anywhere above the Canvas seam.
+    Raw human input capture is delegated to a MouseInput, since buffering OS
+    mouse events is a different concern from drawing pixels - ImgCanvas just
+    owns the window handle MouseInput needs, and attaches it once the window
+    it created is ready.
     """
 
     def __init__(self, window_title: str = "Kung-Fu-Chess"):
         self._window_title = window_title
         self._window_open = False
-        self._pending_clicks = []
+        self._mouse_input = MouseInput()
 
     def load_image(self, path, size=None, keep_aspect=False) -> Img:
         return Img().read(path, size=size, keep_aspect=keep_aspect)
@@ -74,9 +74,7 @@ class ImgCanvas:
 
     def drain_clicks(self):
         """Returns and clears the left-clicks buffered since the last call, as (x, y) image pixels."""
-        clicks = self._pending_clicks
-        self._pending_clicks = []
-        return clicks
+        return self._mouse_input.drain_clicks()
 
     def close(self) -> None:
         if self._window_open:
@@ -90,7 +88,7 @@ class ImgCanvas:
             self._window_open = False
 
     def _ensure_window(self):
-        """Creates the auto-sized window and wires the mouse callback on first show.
+        """Creates the auto-sized window and attaches the mouse input on first show.
 
         WINDOW_AUTOSIZE (the default) is deliberate: clicks arrive in the same
         image-pixel space the board mapper assumes (1:1 with the rendered
@@ -99,9 +97,5 @@ class ImgCanvas:
         if self._window_open:
             return
         cv2.namedWindow(self._window_title)
-        cv2.setMouseCallback(self._window_title, self._on_mouse)
+        self._mouse_input.attach(self._window_title)
         self._window_open = True
-
-    def _on_mouse(self, event, x, y, flags, param):
-        if event == cv2.EVENT_LBUTTONDOWN:
-            self._pending_clicks.append((x, y))

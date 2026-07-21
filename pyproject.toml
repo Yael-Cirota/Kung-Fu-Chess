@@ -2,22 +2,26 @@
 name = "kfchess"
 version = "0.1.0"
 description = "Kung-Fu-Chess: a real-time chess variant"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "opencv-python>=5.0.0",
     "numpy>=2.5.1",
+    "websockets>=12.0",
 ]
 
 [dependency-groups]
 dev = [
     "import-linter>=2.13",
+    "pytest>=8.0",
+    "coverage>=7.0",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
 [tool.importlinter]
-root_packages = ["kfchess", "ui"]
+root_packages = ["kfchess", "ui", "common", "protocol", "server"]
+include_external_packages = true
 
 [[tool.importlinter.contracts]]
 name = "Layers: ui -> kfchess"
@@ -33,3 +37,43 @@ forbidden_modules = [
     "kfchess.engine", "kfchess.input", "kfchess.io", "kfchess.texttests",
 ]
 allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "Protocol layer sits above kfchess and common"
+type = "layers"
+layers = ["protocol", "kfchess", "common"]
+
+[[tool.importlinter.contracts]]
+name = "Server stack layers"
+type = "layers"
+layers = ["server", "protocol", "kfchess", "common"]
+
+[[tool.importlinter.contracts]]
+name = "Server internals layers"
+type = "layers"
+layers = ["server.presentation", "server.application", "server.domain"]
+
+[[tool.importlinter.contracts]]
+name = "Infrastructure is reached only through Protocols"
+type = "forbidden"
+source_modules = ["server.domain", "server.application"]
+forbidden_modules = ["server.infrastructure.sqlite_user_repository", "server.infrastructure.connection_factory"]
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "Engine and shared layers never import outward"
+type = "forbidden"
+source_modules = ["kfchess", "common", "protocol"]
+forbidden_modules = ["ui", "server"]
+
+[[tool.importlinter.contracts]]
+name = "Server and ui never see each other"
+type = "forbidden"
+source_modules = ["server"]
+forbidden_modules = ["ui"]
+
+[[tool.importlinter.contracts]]
+name = "VPL path stays free of networking"
+type = "forbidden"
+source_modules = ["kfchess"]
+forbidden_modules = ["websockets", "asyncio", "socket", "sqlite3"]

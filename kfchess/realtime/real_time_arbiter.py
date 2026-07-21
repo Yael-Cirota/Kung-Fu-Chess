@@ -42,6 +42,7 @@ class RealTimeArbiter:
         movement_profiles: Optional[Dict[PieceKind, MovementProfile]] = None,
         collision_detector: Optional[CollisionDetector] = None,
         collision_resolver: Optional[CollisionResolver] = None,
+        jump_duration_ms: Optional[int] = None,
     ):
         self._board = board
         self._rule_engine = rule_engine
@@ -49,6 +50,7 @@ class RealTimeArbiter:
         self._movement_profiles = movement_profiles if movement_profiles is not None else DEFAULT_MOVEMENT_PROFILES
         self._detector = collision_detector if collision_detector is not None else CollisionDetector()
         self._resolver = collision_resolver if collision_resolver is not None else CollisionResolver()
+        self._jump_duration_ms = jump_duration_ms if jump_duration_ms is not None else JUMP_DURATION_MS
         self._cooldowns = CooldownTracker()
         self._clock_ms = 0
         self._pending: List[Motion] = []
@@ -76,9 +78,9 @@ class RealTimeArbiter:
         if from_pos == to_pos:
             motion = Motion(
                 piece=piece, origin=from_pos, current=from_pos, remaining=[],
-                next_step_at=self._clock_ms + JUMP_DURATION_MS,
-                step_duration_ms=JUMP_DURATION_MS, is_jump=True, seq=self._next_seq,
-                started_at_ms=started_at_ms, total_duration_ms=JUMP_DURATION_MS,
+                next_step_at=self._clock_ms + self._jump_duration_ms,
+                step_duration_ms=self._jump_duration_ms, is_jump=True, seq=self._next_seq,
+                started_at_ms=started_at_ms, total_duration_ms=self._jump_duration_ms,
             )
             self._airborne.add(piece)
         else:

@@ -1,20 +1,16 @@
-from kfchess.model.piece import Color, PieceKind
+from typing import List, Optional
+
+from kfchess.model.piece import PieceKind
 from kfchess.model.board import Board
 from kfchess.model.position import Position
 from kfchess.model.game_state import GameState
 from kfchess.rules.move_validation import MoveRejectionReason
 from kfchess.rules.rule_engine import RuleEngine
-from kfchess.rules.scoring import points_for
+from kfchess.rules.scoring import ScoringPolicy
 from kfchess.realtime.real_time_arbiter import RealTimeArbiter
-from kfchess.realtime.motion import MoveOutcomeStatus
+from kfchess.realtime.motion import MoveOutcome, MoveOutcomeStatus
 from kfchess.engine.move_result import MoveResult
 from kfchess.engine.move_log import MoveRecord
-
-
-def _opponent_of(color: Color) -> Color:
-    """The other color - the two-player assumption that lets us name the captor
-    in a CAPTURED_ON_ARRIVAL outcome, which records only the captured piece."""
-    return Color.BLACK if color is Color.WHITE else Color.WHITE
 
 
 class GameEngine:
@@ -29,12 +25,19 @@ class GameEngine:
     parsing of its own.
     """
 
-    def __init__(self, board: Board, rule_engine: RuleEngine, arbiter: RealTimeArbiter):
+    def __init__(
+        self,
+        board: Board,
+        rule_engine: RuleEngine,
+        arbiter: RealTimeArbiter,
+        scoring: Optional[ScoringPolicy] = None,
+    ):
         self._board = board
         self._rule_engine = rule_engine
         self._arbiter = arbiter
         self._state = GameState()
         self._move_log: list[MoveRecord] = []
+        self._scoring = scoring if scoring is not None else ScoringPolicy()
 
     @property
     def game_over(self) -> bool:
@@ -99,12 +102,14 @@ class GameEngine:
         )
         return MoveResult.accepted()
 
-    def wait(self, ms: int) -> None:
+    def wait(self, ms: int) -> List[MoveOutcome]:
         """
         Advances simulated time by delegating strictly to RealTimeArbiter,
         which owns all Motion state and board mutation on arrival.
         GameEngine never mutates the Board's motion state itself - it only
-        reads the returned outcomes to decide the win condition.
+        reads the returned outcomes to decide the win condition. Returns
+        those outcomes so a caller (e.g. a server-side event sink adapter)
+        can react to them; the VPL path ignores the return value.
         """
         outcomes = self._arbiter.advance(ms)
 
@@ -120,10 +125,12 @@ class GameEngine:
             self.game_over = True
             self._arbiter.cancel_all_pending()
 
+        return outcomes
+
     def _award_capture_points(self, outcome) -> None:
         beneficiary, captured = self._scoring_capture(outcome)
         if captured is not None:
-            self._state.add_score(beneficiary, points_for(captured.kind))
+            self._state.add_score(beneficiary, self._scoring.points_for(captured.kind))
 
     @staticmethod
     def _scoring_capture(outcome):
@@ -137,7 +144,7 @@ class GameEngine:
         if outcome.status is MoveOutcomeStatus.EXECUTED and outcome.captured_piece is not None:
             return outcome.piece.color.value, outcome.captured_piece
         if outcome.status is MoveOutcomeStatus.CAPTURED_ON_ARRIVAL:
-            return _opponent_of(outcome.piece.color).value, outcome.piece
+            return outcome.piece.color.opponent().value, outcome.piece
         return None, None
 
     @staticmethod

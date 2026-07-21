@@ -21,8 +21,8 @@ def board_with(*pieces_at):
     return Board(grid)
 
 
-def make_arbiter(board, cooldown_policy=None):
-    return RealTimeArbiter(board, RuleEngine(), cooldown_policy=cooldown_policy)
+def make_arbiter(board, cooldown_policy=None, jump_duration_ms=None):
+    return RealTimeArbiter(board, RuleEngine(), cooldown_policy=cooldown_policy, jump_duration_ms=jump_duration_ms)
 
 
 class TestTiming:
@@ -229,6 +229,30 @@ class TestJump:
         assert outcomes[0].status is MoveOutcomeStatus.EXECUTED
         assert outcomes[0].captured_piece is defender
         assert board.get(Position(4, 4)) is attacker
+
+
+class TestConfigurableJumpDuration:
+    def test_custom_jump_duration_is_used_instead_of_the_module_default(self):
+        king = Piece('w', PieceKind.KING)
+        board = board_with(((4, 4), king))
+        arbiter = make_arbiter(board, jump_duration_ms=250)
+
+        arbiter.begin_move(king, Position(4, 4), Position(4, 4))
+
+        assert arbiter.advance(249) == []
+        outcomes = arbiter.advance(1)
+        assert len(outcomes) == 1
+        assert outcomes[0].status is MoveOutcomeStatus.EXECUTED
+
+    def test_default_jump_duration_matches_the_module_constant_when_not_given(self):
+        king = Piece('w', PieceKind.KING)
+        board = board_with(((4, 4), king))
+        arbiter = make_arbiter(board)
+
+        arbiter.begin_move(king, Position(4, 4), Position(4, 4))
+
+        assert arbiter.advance(JUMP_DURATION_MS - 1) == []
+        assert len(arbiter.advance(1)) == 1
 
 
 class TestIsMovingLifecycle:

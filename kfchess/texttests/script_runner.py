@@ -10,8 +10,9 @@ from kfchess.engine.game_engine import GameEngine
 from kfchess.input.board_mapper import BoardMapper
 from kfchess.input.controller import Controller
 from kfchess.io.board_printer import BoardPrinter
+from kfchess.io.score_printer import ScorePrinter
 from kfchess.texttests.script_parser import (
-    ScriptParser, ClickCommand, WaitCommand, PrintBoardCommand, JumpCommand,
+    ScriptParser, ClickCommand, WaitCommand, PrintBoardCommand, PrintScoresCommand, JumpCommand,
 )
 
 
@@ -50,13 +51,15 @@ class ScriptRunner:
         game_engine = GameEngine(board, rule_engine, arbiter)
         controller = Controller(game_engine, BoardMapper())
         printer = BoardPrinter()
+        score_printer = ScorePrinter()
 
         for command in script.commands:
-            self._execute(command, controller, game_engine, board, printer)
+            self._execute(command, controller, game_engine, board, printer, score_printer)
 
     @staticmethod
     def _execute(
-        command, controller: Controller, game_engine: GameEngine, board: Board, printer: BoardPrinter
+        command, controller: Controller, game_engine: GameEngine, board: Board,
+        printer: BoardPrinter, score_printer: ScorePrinter,
     ) -> None:
         if isinstance(command, ClickCommand):
             controller.on_click(command.x, command.y)
@@ -64,6 +67,8 @@ class ScriptRunner:
             game_engine.wait(command.ms)
         elif isinstance(command, PrintBoardCommand):
             printer.print(board)
+        elif isinstance(command, PrintScoresCommand):
+            score_printer.print(game_engine.scores())
         elif isinstance(command, JumpCommand):
             controller.on_click(command.x, command.y)
             controller.on_click(command.x, command.y)

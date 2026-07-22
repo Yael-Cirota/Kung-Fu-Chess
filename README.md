@@ -113,6 +113,8 @@ print board
 - `wait <ms>` — advance the simulated clock by `ms` milliseconds, maturing
   any moves scheduled to arrive by then
 - `print board` — print the board's current state, one row per line
+- `print scores` — print the running capture-point score as a single line,
+  `White: <w>  Black: <b>` (pawn 1, knight/bishop 3, rook 5, queen 9, king 10)
 
 Malformed boards produce a single-line error instead of running any
 commands: `ERROR ROW_WIDTH_MISMATCH` or `ERROR UNKNOWN_TOKEN`.

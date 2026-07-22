@@ -112,3 +112,15 @@ def test_parse_ignores_blank_lines_inside_board_section(parser):
         "Commands:"
     )
     assert parser.parse(vpl_input) == "wK bK\n. ."
+
+
+def test_parse_ignores_lines_before_board_section(parser):
+    """Non-empty lines preceding the Board: header are not treated as rows."""
+    vpl_input = (
+        "some preamble\n"
+        "Board:\n"
+        "wK bK\n"
+        ". .\n"
+        "Commands:"
+    )
+    assert parser.parse(vpl_input) == "wK bK\n. ."

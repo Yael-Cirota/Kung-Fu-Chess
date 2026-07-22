@@ -39,6 +39,8 @@ class Motion:
     step_duration_ms: int
     is_jump: bool
     seq: int
+    started_at_ms: int = 0
+    total_duration_ms: int = 0
 
     @property
     def target(self) -> Position:

@@ -4,12 +4,12 @@ from typing import Dict, List
 from kfchess.model.piece import PieceKind
 from kfchess.model.position import Position
 
-# Milliseconds a piece spends crossing a single cell. Kept here (rather
-# than imported from real_time_arbiter) so movement geometry owns its own
-# timing and there is no import cycle between the two modules.
-CELL_SIZE = 100        # pixels
-PIECE_SPEED = 100      # pixels per second
-MOVE_DURATION_MS_PER_CELL = int(CELL_SIZE / PIECE_SPEED * 1000)
+# Milliseconds a piece spends crossing a single cell of board distance.
+# Kept here (rather than imported from real_time_arbiter) so movement
+# geometry owns its own timing and there is no import cycle between the
+# two modules. This is engine-internal timing, unrelated to any rendering
+# unit - ui defines its own pixel cell size independently.
+MOVE_DURATION_MS_PER_CELL = 1000
 
 
 def _sign(value: int) -> int:

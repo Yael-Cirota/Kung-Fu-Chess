@@ -46,7 +46,7 @@ class RatingUpdater:
         self._settled: Set[str] = set()
         bus.subscribe(EventNames.GAME_OVER, self._on_game_over)
 
-    def _on_game_over(self, event: Event) -> None:
+    async def _on_game_over(self, event: Event) -> None:
         room_id = event.payload.get("room_id")
         room = self._rooms.get(room_id)
         if room is None or room_id in self._settled:

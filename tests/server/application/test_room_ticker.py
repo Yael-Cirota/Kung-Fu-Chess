@@ -1,3 +1,5 @@
+import asyncio
+
 from common.events import InMemoryEventBus
 from server.application.disconnect_policy import DisconnectPolicy
 from server.application.game_room import create_game_room
@@ -46,7 +48,7 @@ class TestDeadConnectionHandling:
         registry.bind(ClientSession(ConnectionId("c1"), 1, "alice", 1200, "room-1", "white", epoch=1))
         monitor.register(ConnectionId("c1"), epoch=1, now_ms=0)
 
-        ticker.tick(now_ms=1001)  # connection goes dead
+        asyncio.run(ticker.tick(now_ms=1001))  # connection goes dead
 
         assert disconnect_policy.deadline_for("room-1", "white") is not None
 
@@ -57,7 +59,7 @@ class TestDeadConnectionHandling:
         registry.bind(ClientSession(ConnectionId("c1"), 1, "alice", 1200, "room-1", "white", epoch=2))
         monitor.register(ConnectionId("old-conn"), epoch=1, now_ms=0)
 
-        ticker.tick(now_ms=1001)
+        asyncio.run(ticker.tick(now_ms=1001))
 
         assert disconnect_policy.deadline_for("room-1", "white") is None
 
@@ -65,14 +67,14 @@ class TestDeadConnectionHandling:
         ticker, monitor, disconnect_policy, registry = make_ticker(timeout_ms=1000)
         monitor.register(ConnectionId("ghost"), epoch=1, now_ms=0)
 
-        ticker.tick(now_ms=1001)  # must not raise, and nothing to assert on
+        asyncio.run(ticker.tick(now_ms=1001))  # must not raise, and nothing to assert on
 
     def test_viewer_disconnect_does_not_start_a_countdown(self):
         ticker, monitor, disconnect_policy, registry = make_ticker(timeout_ms=1000)
         registry.bind(ClientSession(ConnectionId("c1"), 1, "alice", 1200, "room-1", "viewer", epoch=1))
         monitor.register(ConnectionId("c1"), epoch=1, now_ms=0)
 
-        ticker.tick(now_ms=1001)
+        asyncio.run(ticker.tick(now_ms=1001))
 
         assert disconnect_policy.deadline_for("room-1", "viewer") is None
 
@@ -84,7 +86,7 @@ class TestForcedResignEndsTheRoom:
         registry.bind(ClientSession(ConnectionId("c1"), 1, "alice", 1200, "room-1", "white", epoch=1))
         monitor.register(ConnectionId("c1"), epoch=1, now_ms=0)
 
-        forced = ticker.tick(now_ms=1001)  # disconnect starts and immediately expires (grace_ms=0)
+        forced = asyncio.run(ticker.tick(now_ms=1001))  # disconnect starts and immediately expires (grace_ms=0)
 
         assert len(forced) == 1
         from server.domain.room_status import RoomStatus
@@ -96,8 +98,8 @@ class TestRoomsAreTicked:
         room = create_game_room("room-1", "wR . .\n. . .\n. . .", FakeWebSocketManager())
         ticker, *_ = make_ticker(rooms={"room-1": room})
 
-        ticker.tick(now_ms=0)
-        ticker.tick(now_ms=50)
+        asyncio.run(ticker.tick(now_ms=0))
+        asyncio.run(ticker.tick(now_ms=50))
 
         assert room.session.clock_ms > 0
 
@@ -107,7 +109,11 @@ class TestMatchmakingIsTicked:
         bus = InMemoryEventBus()
         received = []
         from common.events import EventNames
-        bus.subscribe(EventNames.MATCH_TIMED_OUT, received.append)
+
+        async def on_timeout(event):
+            received.append(event)
+
+        bus.subscribe(EventNames.MATCH_TIMED_OUT, on_timeout)
 
         monitor = ConnectionMonitor(timeout_ms=10000)
         disconnect_policy = DisconnectPolicy(grace_ms=20000)
@@ -116,8 +122,8 @@ class TestMatchmakingIsTicked:
         ticker = RoomTicker({}, monitor, disconnect_policy, matchmaking, registry)
 
         from server.application.matchmaking import MatchTicket
-        matchmaking.enqueue(MatchTicket(user_id=1, username="a", elo=1200), now_ms=0)
+        asyncio.run(matchmaking.enqueue(MatchTicket(user_id=1, username="a", elo=1200), now_ms=0))
 
-        ticker.tick(now_ms=1000)
+        asyncio.run(ticker.tick(now_ms=1000))
 
         assert len(received) == 1

@@ -1,8 +1,17 @@
+import asyncio
+
 from common.events import Event, EventNames, InMemoryEventBus
 from kfchess.api import EngineEvent, EngineEventKind
 from server.application.elo import EloCalculator
 from server.application.rating_updater import RatingUpdater
 from server.infrastructure.repositories import UserRecord
+
+
+def publish(bus, event):
+    """The bus fans out asynchronously now; these tests stay plain pytest
+    by driving each publish to completion on its own loop."""
+    asyncio.run(bus.publish(event))
+
 
 WHITE_ID = 11
 BLACK_ID = 22
@@ -93,14 +102,14 @@ class TestSubscription:
         bus, _users, records, _u = make_updater(FakeRoom())
 
         # nobody holds a reference to the updater; it subscribed on construction
-        bus.publish(resign_event())
+        publish(bus, resign_event())
 
         assert len(records.records) == 1
 
     def test_only_game_over_settles_a_game(self):
         bus, _users, records, _u = make_updater(FakeRoom())
 
-        bus.publish(Event(name=EventNames.PIECE_CAPTURED, payload={"room_id": "room-1"}))
+        publish(bus, Event(name=EventNames.PIECE_CAPTURED, payload={"room_id": "room-1"}))
 
         assert records.records == []
 
@@ -109,7 +118,7 @@ class TestForcedResignIsRated:
     def test_the_disconnected_player_loses_elo_and_the_opponent_gains(self):
         bus, users, _records, _u = make_updater(FakeRoom())
 
-        bus.publish(resign_event(resigned_color="white"))
+        publish(bus, resign_event(resigned_color="white"))
 
         # equal ratings, K=32 -> winner +16, loser -16
         assert users.updates == [(BLACK_ID, 1216), (WHITE_ID, 1184)]
@@ -117,14 +126,14 @@ class TestForcedResignIsRated:
     def test_black_disconnecting_makes_white_the_winner(self):
         bus, users, _records, _u = make_updater(FakeRoom())
 
-        bus.publish(resign_event(resigned_color="black"))
+        publish(bus, resign_event(resigned_color="black"))
 
         assert users.updates == [(WHITE_ID, 1216), (BLACK_ID, 1184)]
 
     def test_records_the_game_with_the_disconnect_reason(self):
         bus, _users, records, _u = make_updater(FakeRoom(clock_ms=4321))
 
-        bus.publish(resign_event(resigned_color="white"))
+        publish(bus, resign_event(resigned_color="white"))
 
         assert records.records == [
             {
@@ -139,7 +148,7 @@ class TestForcedResignIsRated:
     def test_rating_change_reflects_the_gap_between_players(self):
         bus, users, _records, _u = make_updater(FakeRoom(), elos={WHITE_ID: 1600, BLACK_ID: 1200})
 
-        bus.publish(resign_event(resigned_color="black"))
+        publish(bus, resign_event(resigned_color="black"))
 
         # the heavy favourite winning gains little
         winner_update = dict(users.updates)[WHITE_ID]
@@ -150,7 +159,7 @@ class TestEngineGameOverIsRated:
     def test_king_capture_rates_the_beneficiary_as_winner(self):
         bus, users, records, _u = make_updater(FakeRoom())
 
-        bus.publish(engine_over_event(winner="black"))
+        publish(bus, engine_over_event(winner="black"))
 
         assert users.updates == [(BLACK_ID, 1216), (WHITE_ID, 1184)]
         assert records.records[0]["reason"] == "king_captured"
@@ -158,14 +167,14 @@ class TestEngineGameOverIsRated:
     def test_uses_the_engine_event_timestamp(self):
         bus, _users, records, _u = make_updater(FakeRoom(clock_ms=1))
 
-        bus.publish(engine_over_event(at_ms=9999))
+        publish(bus, engine_over_event(at_ms=9999))
 
         assert records.records[0]["ended_at_ms"] == 9999
 
     def test_a_game_over_without_a_winner_is_recorded_but_unrated(self):
         bus, users, records, _u = make_updater(FakeRoom())
 
-        bus.publish(engine_over_event(winner=None))
+        publish(bus, engine_over_event(winner=None))
 
         assert users.updates == []
         assert records.records[0]["winner_id"] is None
@@ -175,8 +184,8 @@ class TestSettlementIsIdempotent:
     def test_a_room_is_settled_only_once(self):
         bus, users, records, _u = make_updater(FakeRoom())
 
-        bus.publish(resign_event(resigned_color="white"))
-        bus.publish(engine_over_event(winner="black"))
+        publish(bus, resign_event(resigned_color="white"))
+        publish(bus, engine_over_event(winner="black"))
 
         assert len(users.updates) == 2  # one pair, not two
         assert len(records.records) == 1
@@ -188,8 +197,8 @@ class TestSettlementIsIdempotent:
         bus = InMemoryEventBus()
         RatingUpdater(bus, {"a": room_a, "b": room_b}, users, records, EloCalculator())
 
-        bus.publish(resign_event(room_id="a"))
-        bus.publish(resign_event(room_id="b"))
+        publish(bus, resign_event(room_id="a"))
+        publish(bus, resign_event(room_id="b"))
 
         assert len(records.records) == 2
 
@@ -198,7 +207,7 @@ class TestUnratedSituations:
     def test_an_unknown_room_is_ignored(self):
         bus, users, records, _u = make_updater(FakeRoom())
 
-        bus.publish(resign_event(room_id="no-such-room"))
+        publish(bus, resign_event(room_id="no-such-room"))
 
         assert users.updates == []
         assert records.records == []
@@ -206,7 +215,7 @@ class TestUnratedSituations:
     def test_a_room_missing_a_seated_player_is_not_settled(self):
         bus, users, records, _u = make_updater(FakeRoom(user_ids={"white": WHITE_ID}))
 
-        bus.publish(resign_event(resigned_color="white"))
+        publish(bus, resign_event(resigned_color="white"))
 
         assert users.updates == []
         assert records.records == []
@@ -214,7 +223,7 @@ class TestUnratedSituations:
     def test_a_missing_user_record_skips_the_elo_write_but_still_records(self):
         bus, users, records, _u = make_updater(FakeRoom(), elos={WHITE_ID: 1200})
 
-        bus.publish(resign_event(resigned_color="white"))
+        publish(bus, resign_event(resigned_color="white"))
 
         assert users.updates == []
         assert records.records[0]["winner_id"] == BLACK_ID
@@ -222,7 +231,7 @@ class TestUnratedSituations:
     def test_an_unrecognised_resigned_color_leaves_the_game_unrated(self):
         bus, users, records, _u = make_updater(FakeRoom())
 
-        bus.publish(
+        publish(bus, 
             Event(name=EventNames.GAME_OVER, payload={"room_id": "room-1", "resigned_color": "green"})
         )
 

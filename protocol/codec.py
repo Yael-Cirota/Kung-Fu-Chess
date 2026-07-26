@@ -38,30 +38,51 @@ _TYPE_TO_CLASS: Dict[str, Type] = {
 _CLASS_TO_TYPE = {cls: name for name, cls in _TYPE_TO_CLASS.items()}
 
 
+@dataclasses.dataclass(frozen=True)
+class Envelope:
+    """The wire frame itself: a type discriminator plus an opaque payload.
+    Its field names *are* the JSON keys, so the envelope shape is declared
+    here once instead of spelled out as literals at every use site."""
+
+    type: str
+    payload: Dict[str, Any]
+
+    def to_json(self) -> str:
+        return json.dumps(dataclasses.asdict(self))
+
+    @classmethod
+    def from_json(cls, raw: str) -> "Envelope":
+        """Raises ProtocolError(MALFORMED_JSON) on anything that isn't an
+        object carrying exactly the envelope's fields."""
+        try:
+            frame = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            raise ProtocolError(ProtocolError.MALFORMED_JSON)
+
+        keys = [f.name for f in dataclasses.fields(cls)]
+        if not isinstance(frame, dict) or any(key not in frame for key in keys):
+            raise ProtocolError(ProtocolError.MALFORMED_JSON)
+
+        return cls(**{key: frame[key] for key in keys})
+
+
 def encode(message: Any) -> str:
     """Message -> wire JSON string."""
-    type_name = _CLASS_TO_TYPE[type(message)]
-    payload = dataclasses.asdict(message)
-    return json.dumps({"type": type_name, "payload": payload})
+    envelope = Envelope(type=_CLASS_TO_TYPE[type(message)], payload=dataclasses.asdict(message))
+    return envelope.to_json()
 
 
 def decode(raw: str) -> Any:
     """Wire JSON string -> message. Raises ProtocolError on anything that
     isn't a well-formed, known, schema-matching frame."""
-    try:
-        envelope = json.loads(raw)
-    except (json.JSONDecodeError, TypeError):
-        raise ProtocolError(ProtocolError.MALFORMED_JSON)
+    envelope = Envelope.from_json(raw)
 
-    if not isinstance(envelope, dict) or "type" not in envelope or "payload" not in envelope:
-        raise ProtocolError(ProtocolError.MALFORMED_JSON)
-
-    cls = _TYPE_TO_CLASS.get(envelope["type"])
-    if cls is None:
+    message_cls = _TYPE_TO_CLASS.get(envelope.type)
+    if message_cls is None:
         raise ProtocolError(ProtocolError.UNKNOWN_TYPE)
 
     try:
-        return _from_dict(cls, envelope["payload"])
+        return _from_dict(message_cls, envelope.payload)
     except (TypeError, KeyError, AttributeError):
         raise ProtocolError(ProtocolError.SCHEMA_MISMATCH)
 

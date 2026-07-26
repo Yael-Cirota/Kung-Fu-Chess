@@ -1,3 +1,5 @@
+import asyncio
+
 from kfchess.api import Position
 from common.events import InMemoryEventBus
 from protocol import codec, messages as m
@@ -47,19 +49,20 @@ class TestDeltaEventOnCapture:
         ws.sent.clear()
 
         room.enqueue_move(PendingMove("w", Position(0, 0), Position(0, 2), client_seq=1, connection_id=WHITE_CONN))
-        room.tick(now_ms=0)
-        room.tick(now_ms=2000)
+        asyncio.run(room.tick(now_ms=0))
+        asyncio.run(room.tick(now_ms=2000))
 
         deltas = [msg for _c, msg in ws.decoded() if isinstance(msg, m.DeltaEvent)]
         assert len(deltas) == 2  # one per seat
         assert deltas[0].kind == "piece_captured"
 
     def test_delta_event_arrives_before_the_next_gated_state_update(self):
-        # BroadcastObserver fires synchronously from within session.wait(),
-        # which happens during 'advance' - strictly before 'broadcast' in
-        # GameRoom.tick's drain -> advance -> broadcast sequence. So on the
-        # same tick that matures the capture, the DeltaEvent is enqueued to
-        # the fake transport ahead of that tick's StateUpdate.
+        # BroadcastObserver fires from GameRoom's event flush, which runs
+        # immediately after session.wait() during 'advance' - strictly before
+        # 'broadcast' in GameRoom.tick's drain -> advance -> broadcast
+        # sequence. So on the same tick that matures the capture, the
+        # DeltaEvent is enqueued to the fake transport ahead of that tick's
+        # StateUpdate.
         ws = FakeWebSocketManager()
         bus = InMemoryEventBus()
         room = create_game_room(
@@ -71,9 +74,9 @@ class TestDeltaEventOnCapture:
         ws.sent.clear()
 
         room.enqueue_move(PendingMove("w", Position(0, 0), Position(0, 2), client_seq=1, connection_id=WHITE_CONN))
-        room.tick(now_ms=0)
+        asyncio.run(room.tick(now_ms=0))
         ws.sent.clear()
-        room.tick(now_ms=2000)
+        asyncio.run(room.tick(now_ms=2000))
 
         white_messages = [msg for conn_id, msg in ws.decoded() if conn_id == WHITE_CONN]
         delta_index = next(i for i, msg in enumerate(white_messages) if isinstance(msg, m.DeltaEvent))
@@ -88,7 +91,7 @@ class TestUnrelatedRoomIsIgnored:
         BroadcastObserver(bus, ws, {})
 
         from common.events import Event, EventNames
-        bus.publish(Event(name=EventNames.PIECE_CAPTURED, payload={"room_id": "ghost"}))  # must not raise
+        asyncio.run(bus.publish(Event(name=EventNames.PIECE_CAPTURED, payload={"room_id": "ghost"})))  # must not raise
         assert ws.sent == []
 
 
@@ -102,7 +105,7 @@ class TestForcedResignDeltaEvent:
         BroadcastObserver(bus, ws, {"room-1": room})
         ws.sent.clear()
 
-        room.force_resign("white")
+        asyncio.run(room.force_resign("white"))
 
         deltas = [msg for _c, msg in ws.decoded() if isinstance(msg, m.DeltaEvent)]
         assert len(deltas) == 2

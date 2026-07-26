@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from dataclasses import replace
@@ -6,6 +7,11 @@ from common.config.schema import AppConfig
 from common.events import Event, EventNames, InMemoryEventBus
 from server.main import SERVER_LOGGER_NAME, Server, build_server, build_server_from_path
 from server.presentation.dispatcher import MessageDispatcher
+
+
+def publish(bus, event):
+    """The bus fans out asynchronously; drive each publish to completion."""
+    asyncio.run(bus.publish(event))
 
 
 def make_config(tmp_path, **overrides):
@@ -78,7 +84,7 @@ class TestLoggingIsConnected:
     def test_a_domain_event_on_the_assembled_bus_reaches_the_configured_log_file(self, tmp_path):
         server = build_server(make_config(tmp_path))
 
-        server.bus.publish(Event(
+        publish(server.bus, Event(
             name=EventNames.GAME_OVER,
             payload={"room_id": "room-7", "at_ms": 1234},
             trace_id="trace-abc",
@@ -96,14 +102,14 @@ class TestLoggingIsConnected:
     def test_unsubscribed_events_are_not_logged(self, tmp_path):
         server = build_server(make_config(tmp_path))
 
-        server.bus.publish(Event(name=EventNames.SCORE_CHANGED, payload={}))
+        publish(server.bus, Event(name=EventNames.SCORE_CHANGED, payload={}))
 
         assert read_log_lines(tmp_path) == []
 
     def test_log_level_comes_from_config(self, tmp_path):
         server = build_server(make_config(tmp_path, logging={"level": "WARNING"}))
 
-        server.bus.publish(Event(name=EventNames.GAME_OVER, payload={}))
+        publish(server.bus, Event(name=EventNames.GAME_OVER, payload={}))
 
         assert server.logger.level == logging.WARNING
         assert read_log_lines(tmp_path) == []
@@ -119,7 +125,7 @@ class TestLoggingIsConnected:
         build_server(make_config(tmp_path))
         server = build_server(make_config(tmp_path))
 
-        server.bus.publish(Event(name=EventNames.GAME_OVER, payload={"room_id": "r"}))
+        publish(server.bus, Event(name=EventNames.GAME_OVER, payload={"room_id": "r"}))
 
         assert len(read_log_lines(tmp_path)) == 1
 

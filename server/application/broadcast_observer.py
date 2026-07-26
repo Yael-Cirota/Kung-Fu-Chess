@@ -19,7 +19,7 @@ class BroadcastObserver:
         for name in (EventNames.MOVE_LOGGED, EventNames.PIECE_CAPTURED, EventNames.GAME_OVER):
             bus.subscribe(name, self._on_event)
 
-    def _on_event(self, event: Event) -> None:
+    async def _on_event(self, event: Event) -> None:
         room = self._rooms.get(event.payload.get("room_id"))
         if room is None:
             return

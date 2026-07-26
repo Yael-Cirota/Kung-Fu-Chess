@@ -22,7 +22,7 @@ class ActivityLog:
         for name in _SUBSCRIBED_EVENTS:
             bus.subscribe(name, self._on_event)
 
-    def _on_event(self, event: Event) -> None:
+    async def _on_event(self, event: Event) -> None:
         self._logger.info(
             event.name,
             extra={

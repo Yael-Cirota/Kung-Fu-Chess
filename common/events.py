@@ -1,6 +1,6 @@
 import logging
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Mapping, Optional, Protocol, runtime_checkable
+from typing import Awaitable, Callable, Dict, List, Mapping, Optional, Protocol, runtime_checkable
 
 logger = logging.getLogger(__name__)
 
@@ -26,21 +26,30 @@ class Event:
     trace_id: Optional[str] = None
 
 
-Handler = Callable[[Event], None]
+Handler = Callable[[Event], Awaitable[None]]
 
 
 @runtime_checkable
 class EventBus(Protocol):
+    """`subscribe`/`unsubscribe` stay synchronous on purpose: subscribers
+    register at construction time, so the composition root never needs a
+    running event loop. Only `publish` is a coroutine."""
+
     def subscribe(self, name: str, handler: Handler) -> None: ...
 
     def unsubscribe(self, name: str, handler: Handler) -> None: ...
 
-    def publish(self, event: Event) -> None: ...
+    async def publish(self, event: Event) -> None: ...
 
 
 class InMemoryEventBus:
-    """Synchronous fan-out. Handler exceptions are logged and swallowed so one
-    bad subscriber cannot kill a game tick."""
+    """Async fan-out, awaited to completion before `publish` returns. Handlers
+    run sequentially in subscription order and never interleave at their await
+    points - fire-and-forget (`create_task`) or `gather` would make a tick's
+    observable order depend on scheduling, and the engine is deterministic by
+    contract. Handler exceptions are logged and swallowed so one bad subscriber
+    cannot kill a game tick; `CancelledError` is a BaseException and so still
+    propagates, which is what lets a shutdown actually cancel a publish."""
 
     def __init__(self):
         self._handlers: Dict[str, List[Handler]] = {}
@@ -53,9 +62,10 @@ class InMemoryEventBus:
         if handlers is not None and handler in handlers:
             handlers.remove(handler)
 
-    def publish(self, event: Event) -> None:
+    async def publish(self, event: Event) -> None:
+        # Snapshot: a handler may unsubscribe itself (or another) mid-fan-out.
         for handler in list(self._handlers.get(event.name, [])):
             try:
-                handler(event)
+                await handler(event)
             except Exception:
                 logger.exception("event handler failed for %s", event.name)

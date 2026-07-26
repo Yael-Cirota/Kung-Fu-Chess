@@ -1,7 +1,14 @@
+import asyncio
 import logging
 
 from common.events import Event, EventNames, InMemoryEventBus
 from server.application.activity_log import ActivityLog
+
+
+def publish(bus, event):
+    """The bus fans out asynchronously now; these tests stay plain pytest
+    by driving each publish to completion on its own loop."""
+    asyncio.run(bus.publish(event))
 
 
 class ListHandler(logging.Handler):
@@ -33,7 +40,7 @@ class TestSubscription:
             EventNames.MOVE_LOGGED, EventNames.PIECE_CAPTURED, EventNames.GAME_STARTED,
             EventNames.GAME_OVER, EventNames.PLAYER_DISCONNECTED, EventNames.PLAYER_RECONNECTED,
         ):
-            bus.publish(Event(name=name, payload={"room_id": "r1"}))
+            publish(bus, Event(name=name, payload={"room_id": "r1"}))
 
         assert len(handler.records) == 6
 
@@ -42,7 +49,7 @@ class TestSubscription:
         logger, handler = make_logger()
         ActivityLog(bus, logger)
 
-        bus.publish(Event(name=EventNames.SCORE_CHANGED, payload={}))
+        publish(bus, Event(name=EventNames.SCORE_CHANGED, payload={}))
 
         assert handler.records == []
 
@@ -53,7 +60,7 @@ class TestLogLineContent:
         logger, handler = make_logger()
         ActivityLog(bus, logger)
 
-        bus.publish(Event(
+        publish(bus, Event(
             name=EventNames.PIECE_CAPTURED,
             payload={"room_id": "room-1", "at_ms": 4200},
             trace_id="trace-9",
@@ -71,7 +78,7 @@ class TestLogLineContent:
         logger, handler = make_logger()
         ActivityLog(bus, logger)
 
-        bus.publish(Event(name=EventNames.GAME_OVER, payload={}))
+        publish(bus, Event(name=EventNames.GAME_OVER, payload={}))
 
         record = handler.records[0]
         assert record.room_id is None

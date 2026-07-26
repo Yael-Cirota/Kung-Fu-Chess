@@ -28,7 +28,7 @@ class RoomTicker:
         self._matchmaking_service = matchmaking_service
         self._client_sessions = client_sessions
 
-    def tick(self, now_ms: int) -> List[ForcedResign]:
+    async def tick(self, now_ms: int) -> List[ForcedResign]:
         for dead in self._connection_monitor.tick(now_ms):
             session = self._client_sessions.get(dead.connection_id)
             if session is None or dead.epoch < session.epoch:
@@ -40,11 +40,11 @@ class RoomTicker:
         for resign in forced_resigns:
             room = self._rooms.get(resign.room_id)
             if room is not None:
-                room.force_resign(resign.color)
+                await room.force_resign(resign.color)
 
-        self._matchmaking_service.tick(now_ms)
+        await self._matchmaking_service.tick(now_ms)
 
-        for room in self._rooms.values():
-            room.tick(now_ms)
+        for room in list(self._rooms.values()):
+            await room.tick(now_ms)
 
         return forced_resigns

@@ -51,6 +51,9 @@ class GameRoom:
         self._viewer_conn_ids: List[ConnectionId] = []
         self._move_trace_ids: Dict[int, str] = {}
         self._tick_trace_id: Optional[str] = None
+        # Engine events land here during session.wait() and are published right
+        # after it returns - see `emit`.
+        self._pending_events: List[Event] = []
 
         self._last_tick_ms: Optional[int] = None
         self._last_broadcast_ms: Optional[int] = None
@@ -99,7 +102,7 @@ class GameRoom:
 
     # --- tick: drain -> advance -> broadcast, in that fixed order ---
 
-    def tick(self, now_ms: int) -> None:
+    async def tick(self, now_ms: int) -> None:
         if self._last_tick_ms is None:
             self._last_tick_ms = now_ms
 
@@ -109,6 +112,10 @@ class GameRoom:
         if dt > 0:
             self._tick_trace_id = self._new_trace_id()
             self.session.wait(dt)
+            # Deliberately before clearing _tick_trace_id, before the game_over
+            # status transition, and before _broadcast_state: subscribers used
+            # to run inside wait(), and this is where that ordering is kept.
+            await self._flush_events()
             self._tick_trace_id = None
             self._last_tick_ms += dt
 
@@ -169,12 +176,12 @@ class GameRoom:
 
     # --- forced resign (disconnect) ---
 
-    def force_resign(self, color: str) -> None:
+    async def force_resign(self, color: str) -> None:
         if self.status is RoomStatus.ENDED:
             return
         self.status = RoomStatus.ENDED
         if self._bus is not None:
-            self._bus.publish(Event(
+            await self._bus.publish(Event(
                 name=EventNames.GAME_OVER,
                 payload={"room_id": self.room_id, "reason": "disconnect", "resigned_color": color},
                 trace_id=self._new_trace_id(),
@@ -183,6 +190,11 @@ class GameRoom:
     # --- EngineEventSink: kfchess calls this during session.wait() ---
 
     def emit(self, event: EngineEvent) -> None:
+        """Stays synchronous because kfchess is a synchronous engine and this
+        is its callback - `session.wait()` cannot await. Trace-id resolution
+        happens here, not at flush time, because it reads `_tick_trace_id` and
+        pops `_move_trace_ids`: both are only correct at emit order. The fully
+        built Event is buffered, and `_flush_events` publishes it."""
         if self._bus is None:
             return
         name = _ENGINE_EVENT_TO_BUS_NAME.get(event.kind)
@@ -193,11 +205,20 @@ class GameRoom:
         if event.piece is not None and event.piece.piece_id in self._move_trace_ids:
             trace_id = self._move_trace_ids.pop(event.piece.piece_id)
 
-        self._bus.publish(Event(
+        self._pending_events.append(Event(
             name=name,
             payload={"room_id": self.room_id, "engine_event": event},
             trace_id=trace_id,
         ))
+
+    async def _flush_events(self) -> None:
+        # Same swap-then-drain shape as _drain: an event published by a handler
+        # re-entering emit waits for the next flush rather than extending this
+        # one mid-iteration. The loop body is unreachable on a bus-less room,
+        # since emit returns before buffering anything when _bus is None.
+        events, self._pending_events = self._pending_events, []
+        for event in events:
+            await self._bus.publish(event)
 
     def _new_trace_id(self) -> Optional[str]:
         return self._trace_id_generator.new_id() if self._trace_id_generator is not None else None

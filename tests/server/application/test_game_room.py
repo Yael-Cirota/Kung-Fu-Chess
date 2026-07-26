@@ -1,3 +1,5 @@
+import asyncio
+
 from kfchess.api import EngineEvent, EngineEventKind, Position, create_game_session
 from common.events import Event, EventNames, InMemoryEventBus
 from common.tracing import SequentialTraceIdGenerator
@@ -6,6 +8,15 @@ from server.application.game_room import GameRoom, create_game_room
 from server.domain.connection_id import ConnectionId
 from server.domain.pending_move import PendingMove
 from server.domain.room_status import RoomStatus
+
+
+def recorder(sink):
+    """The bus awaits its handlers, so `list.append` is no longer a subscriber."""
+
+    async def handler(event):
+        sink.append(event)
+
+    return handler
 
 
 class FakeWebSocketManager:
@@ -167,7 +178,7 @@ class TestQueueDraining:
         ws.sent.clear()
 
         room.enqueue_move(PendingMove("w", Position(0, 0), Position(0, 2), client_seq=1, connection_id=WHITE_CONN))
-        room.tick(now_ms=0)
+        asyncio.run(room.tick(now_ms=0))
 
         acks = [msg for _conn_id, msg in ws.decoded() if isinstance(msg, m.MoveAck)]
         assert acks == [m.MoveAck(client_seq=1, accepted=True, reason=None)]
@@ -224,7 +235,7 @@ class TestQueueDraining:
         room.session = ReentrantSession(room)
 
         room.enqueue_move(PendingMove("w", Position(0, 0), Position(0, 2), client_seq=1, connection_id=WHITE_CONN))
-        room.tick(now_ms=0)
+        asyncio.run(room.tick(now_ms=0))
 
         acks = [msg for _conn_id, msg in ws.decoded() if isinstance(msg, m.MoveAck)]
         # Only the first move (client_seq=1) was drained this tick; the
@@ -232,7 +243,7 @@ class TestQueueDraining:
         assert acks == [m.MoveAck(client_seq=1, accepted=True, reason=None)]
 
         ws.sent.clear()
-        room.tick(now_ms=10)
+        asyncio.run(room.tick(now_ms=10))
         acks_next_tick = [msg for _conn_id, msg in ws.decoded() if isinstance(msg, m.MoveAck)]
         assert acks_next_tick == [m.MoveAck(client_seq=99, accepted=True, reason=None)]
 
@@ -244,10 +255,10 @@ class TestQueueDraining:
         ws.sent.clear()
 
         room.enqueue_move(PendingMove("w", Position(0, 0), Position(0, 2), client_seq=1, connection_id=WHITE_CONN))
-        room.tick(now_ms=0)  # rook starts sliding, one cell per 1000ms
+        asyncio.run(room.tick(now_ms=0))  # rook starts sliding, one cell per 1000ms
 
         room.enqueue_move(PendingMove("w", Position(0, 0), Position(0, 2), client_seq=2, connection_id=WHITE_CONN))
-        room.tick(now_ms=100)  # rook is still mid-flight; a second move on it must be rejected
+        asyncio.run(room.tick(now_ms=100))  # rook is still mid-flight; a second move on it must be rejected
 
         acks = [msg for _conn_id, msg in ws.decoded() if isinstance(msg, m.MoveAck)]
         second_ack = [ack for ack in acks if ack.client_seq == 2][0]
@@ -263,16 +274,16 @@ class TestBroadcastCadence:
         room.assign_seat("black", BLACK_CONN)
         ws.sent.clear()
 
-        room.tick(now_ms=0)  # first tick establishes the broadcast baseline, still fires once
+        asyncio.run(room.tick(now_ms=0))  # first tick establishes the broadcast baseline, still fires once
         # One StateUpdate per seat (2 seats, no viewers here).
         state_updates_first = [msg for _c, msg in ws.decoded() if isinstance(msg, m.StateUpdate)]
         assert len(state_updates_first) == 2
 
         ws.sent.clear()
-        room.tick(now_ms=50)  # too soon
+        asyncio.run(room.tick(now_ms=50))  # too soon
         assert [msg for _c, msg in ws.decoded() if isinstance(msg, m.StateUpdate)] == []
 
-        room.tick(now_ms=101)  # interval elapsed
+        asyncio.run(room.tick(now_ms=101))  # interval elapsed
         assert len([msg for _c, msg in ws.decoded() if isinstance(msg, m.StateUpdate)]) == 2
 
     def test_state_update_is_sent_to_seats_and_viewers(self):
@@ -283,7 +294,7 @@ class TestBroadcastCadence:
         room.add_viewer(VIEWER_CONN)
         ws.sent.clear()
 
-        room.tick(now_ms=0)
+        asyncio.run(room.tick(now_ms=0))
 
         recipients = {conn_id for conn_id, msg in ws.decoded() if isinstance(msg, m.StateUpdate)}
         assert recipients == {WHITE_CONN, BLACK_CONN, VIEWER_CONN}
@@ -293,14 +304,14 @@ class TestEventBusWiring:
     def test_move_logged_is_published_via_the_bus_not_a_direct_call(self):
         bus = InMemoryEventBus()
         received = []
-        bus.subscribe(EventNames.MOVE_LOGGED, received.append)
+        bus.subscribe(EventNames.MOVE_LOGGED, recorder(received))
 
         room = create_game_room(
             "room-1", "wR . .\n. . .\n. . .", FakeWebSocketManager(), bus=bus, max_engine_step_ms=5000,
         )
         room.enqueue_move(PendingMove("w", Position(0, 0), Position(0, 2), client_seq=1, connection_id=WHITE_CONN))
-        room.tick(now_ms=0)
-        room.tick(now_ms=2000)
+        asyncio.run(room.tick(now_ms=0))
+        asyncio.run(room.tick(now_ms=2000))
 
         assert len(received) == 1
         assert received[0].payload["room_id"] == "room-1"
@@ -308,28 +319,28 @@ class TestEventBusWiring:
     def test_piece_captured_is_published(self):
         bus = InMemoryEventBus()
         received = []
-        bus.subscribe(EventNames.PIECE_CAPTURED, received.append)
+        bus.subscribe(EventNames.PIECE_CAPTURED, recorder(received))
 
         room = create_game_room(
             "room-1", "wR . bP\n. . .\n. . .", FakeWebSocketManager(), bus=bus, max_engine_step_ms=5000,
         )
         room.enqueue_move(PendingMove("w", Position(0, 0), Position(0, 2), client_seq=1, connection_id=WHITE_CONN))
-        room.tick(now_ms=0)
-        room.tick(now_ms=2000)
+        asyncio.run(room.tick(now_ms=0))
+        asyncio.run(room.tick(now_ms=2000))
 
         assert len(received) == 1
 
     def test_game_over_is_published_on_a_king_capture(self):
         bus = InMemoryEventBus()
         received = []
-        bus.subscribe(EventNames.GAME_OVER, received.append)
+        bus.subscribe(EventNames.GAME_OVER, recorder(received))
 
         room = create_game_room(
             "room-1", "wR . bK\n. . .\n. . .", FakeWebSocketManager(), bus=bus, max_engine_step_ms=5000,
         )
         room.enqueue_move(PendingMove("w", Position(0, 0), Position(0, 2), client_seq=1, connection_id=WHITE_CONN))
-        room.tick(now_ms=0)
-        room.tick(now_ms=2000)
+        asyncio.run(room.tick(now_ms=0))
+        asyncio.run(room.tick(now_ms=2000))
 
         assert len(received) == 1
         assert room.status is RoomStatus.ENDED
@@ -339,7 +350,7 @@ class TestTracing:
     def test_pending_moves_trace_id_reaches_the_move_logged_event(self):
         bus = InMemoryEventBus()
         received = []
-        bus.subscribe(EventNames.MOVE_LOGGED, received.append)
+        bus.subscribe(EventNames.MOVE_LOGGED, recorder(received))
 
         room = create_game_room(
             "room-1", "wR . .\n. . .\n. . .", FakeWebSocketManager(), bus=bus, max_engine_step_ms=5000,
@@ -347,15 +358,15 @@ class TestTracing:
         room.enqueue_move(PendingMove(
             "w", Position(0, 0), Position(0, 2), client_seq=1, connection_id=WHITE_CONN, trace_id="trace-abc",
         ))
-        room.tick(now_ms=0)
-        room.tick(now_ms=2000)
+        asyncio.run(room.tick(now_ms=0))
+        asyncio.run(room.tick(now_ms=2000))
 
         assert received[0].trace_id == "trace-abc"
 
     def test_per_tick_fallback_trace_id_is_used_for_events_with_no_originating_pending_move(self):
         bus = InMemoryEventBus()
         received = []
-        bus.subscribe(EventNames.PIECE_CAPTURED, received.append)
+        bus.subscribe(EventNames.PIECE_CAPTURED, recorder(received))
         trace_ids = SequentialTraceIdGenerator()
 
         # request_move called directly (bypassing enqueue_move/_drain) means
@@ -366,8 +377,8 @@ class TestTracing:
             max_engine_step_ms=5000,
         )
         room.session.request_move(Position(0, 0), Position(0, 2))
-        room.tick(now_ms=0)
-        room.tick(now_ms=2000)
+        asyncio.run(room.tick(now_ms=0))
+        asyncio.run(room.tick(now_ms=2000))
 
         assert len(received) == 1
         assert received[-1].trace_id is not None
@@ -377,10 +388,10 @@ class TestForceResign:
     def test_ends_the_room_and_publishes_game_over(self):
         bus = InMemoryEventBus()
         received = []
-        bus.subscribe(EventNames.GAME_OVER, received.append)
+        bus.subscribe(EventNames.GAME_OVER, recorder(received))
         room = create_game_room("room-1", "wR . .\n. . .\n. . .", FakeWebSocketManager(), bus=bus)
 
-        room.force_resign("white")
+        asyncio.run(room.force_resign("white"))
 
         assert room.status is RoomStatus.ENDED
         assert len(received) == 1
@@ -389,11 +400,11 @@ class TestForceResign:
     def test_force_resign_is_idempotent(self):
         bus = InMemoryEventBus()
         received = []
-        bus.subscribe(EventNames.GAME_OVER, received.append)
+        bus.subscribe(EventNames.GAME_OVER, recorder(received))
         room = create_game_room("room-1", "wR . .\n. . .\n. . .", FakeWebSocketManager(), bus=bus)
 
-        room.force_resign("white")
-        room.force_resign("white")
+        asyncio.run(room.force_resign("white"))
+        asyncio.run(room.force_resign("white"))
 
         assert len(received) == 1
 
@@ -411,7 +422,7 @@ class TestEmitEdgeCases:
         bus = InMemoryEventBus()
         received = []
         for name in (EventNames.MOVE_LOGGED, EventNames.PIECE_CAPTURED, EventNames.MOVE_STOPPED, EventNames.GAME_OVER):
-            bus.subscribe(name, received.append)
+            bus.subscribe(name, recorder(received))
         room = make_room(bus=bus)
 
         event = EngineEvent(
@@ -419,5 +430,23 @@ class TestEmitEdgeCases:
             from_pos=None, to_pos=None, captured=None, beneficiary_color=None,
         )
         room.emit(event)
+        asyncio.run(room._flush_events())  # nothing was buffered, so nothing fans out
 
         assert received == []
+
+    def test_engine_events_are_buffered_during_wait_and_published_after_it(self):
+        # emit() cannot await (kfchess calls it from inside session.wait), so
+        # the Event is buffered and the flush that follows wait publishes it.
+        bus = InMemoryEventBus()
+        received = []
+        bus.subscribe(EventNames.MOVE_LOGGED, recorder(received))
+        room = create_game_room(
+            "room-1", "wR . .\n. . .\n. . .", FakeWebSocketManager(), bus=bus, max_engine_step_ms=5000,
+        )
+        room.session.request_move(Position(0, 0), Position(0, 2))
+
+        room.session.wait(2000)  # drives emit() without a tick around it
+        assert received == []  # buffered, not yet published
+
+        asyncio.run(room._flush_events())
+        assert len(received) == 1

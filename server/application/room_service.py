@@ -1,8 +1,21 @@
 import secrets
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Dict, List, Optional, Protocol, runtime_checkable
 
 from common.result import Result
+
+
+class Role(str, Enum):
+    """A seat in a room. Subclasses `str` so the wire protocol and existing
+    string comparisons keep seeing the plain role name."""
+
+    WHITE = "white"
+    BLACK = "black"
+    VIEWER = "viewer"
+
+    def __str__(self) -> str:
+        return self.value
 
 
 @dataclass(frozen=True)
@@ -18,18 +31,18 @@ class Room:
     room_id: str
     players: List[PlayerRef] = field(default_factory=list)
 
-    def role_for_index(self, index: int) -> str:
+    def role_for_index(self, index: int) -> Role:
         if index == 0:
-            return "white"
+            return Role.WHITE
         if index == 1:
-            return "black"
-        return "viewer"
+            return Role.BLACK
+        return Role.VIEWER
 
 
 @dataclass(frozen=True)
 class JoinResult:
     room: Room
-    role: str
+    role: Role
 
 
 class RoomErrorReason:

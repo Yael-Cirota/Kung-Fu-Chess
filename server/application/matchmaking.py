@@ -34,7 +34,7 @@ class MatchmakingService:
         self._timeout_ms = timeout_ms
         self._queue: Dict[int, Tuple[MatchTicket, int]] = {}
 
-    def enqueue(self, ticket: MatchTicket, now_ms: int) -> Optional[Match]:
+    async def enqueue(self, ticket: MatchTicket, now_ms: int) -> Optional[Match]:
         # Dict iteration follows insertion order (guaranteed since 3.7), so this
         # scan is FIFO: the longest-waiting opponent inside the ELO window wins,
         # not the closest ELO. Do not swap _queue for an unordered container.
@@ -45,7 +45,7 @@ class MatchmakingService:
                 del self._queue[other_id]
                 white, black = (ticket, other_ticket) if ticket.elo <= other_ticket.elo else (other_ticket, ticket)
                 match = Match(white=white, black=black)
-                self._bus.publish(Event(name=EventNames.MATCH_FOUND, payload={"match": match}))
+                await self._bus.publish(Event(name=EventNames.MATCH_FOUND, payload={"match": match}))
                 return match
 
         self._queue[ticket.user_id] = (ticket, now_ms)
@@ -54,11 +54,11 @@ class MatchmakingService:
     def cancel(self, user_id: int) -> None:
         self._queue.pop(user_id, None)
 
-    def tick(self, now_ms: int) -> List[MatchTimeout]:
+    async def tick(self, now_ms: int) -> List[MatchTimeout]:
         timed_out = []
         for user_id, (_ticket, enqueued_at_ms) in list(self._queue.items()):
             if now_ms - enqueued_at_ms >= self._timeout_ms:
                 del self._queue[user_id]
                 timed_out.append(MatchTimeout(user_id=user_id))
-                self._bus.publish(Event(name=EventNames.MATCH_TIMED_OUT, payload={"user_id": user_id}))
+                await self._bus.publish(Event(name=EventNames.MATCH_TIMED_OUT, payload={"user_id": user_id}))
         return timed_out

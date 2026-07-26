@@ -59,8 +59,6 @@ class GameRoom:
         self._last_broadcast_ms: Optional[int] = None
         self._seq = 0
 
-    # --- seats & lifecycle ---
-
     def assign_seat(self, role: str, conn_id: ConnectionId, user_id: Optional[int] = None) -> None:
         """A player seat without a `user_id` leaves the game unrated: RatingUpdater
         cannot identify the players, so no Elo is written and no game_record is
@@ -109,12 +107,8 @@ class GameRoom:
         snapshot = self.session.board_snapshot()
         return m.GameStarted(server_ms=self.session.clock_ms, rows=snapshot.rows, cols=snapshot.cols)
 
-    # --- command queue ---
-
     def enqueue_move(self, pending: PendingMove) -> None:
         self._command_queue.append(pending)
-
-    # --- tick: drain -> advance -> broadcast, in that fixed order ---
 
     async def tick(self, now_ms: int) -> None:
         if self._last_tick_ms is None:
@@ -188,8 +182,6 @@ class GameRoom:
         """color -> user_id for the two seated players, for result settlement."""
         return dict(self._seat_user_ids)
 
-    # --- forced resign (disconnect) ---
-
     async def force_resign(self, color: str) -> None:
         if self.status is RoomStatus.ENDED:
             return
@@ -200,8 +192,6 @@ class GameRoom:
                 payload={"room_id": self.room_id, "reason": "disconnect", "resigned_color": color},
                 trace_id=self._new_trace_id(),
             ))
-
-    # --- EngineEventSink: kfchess calls this during session.wait() ---
 
     def emit(self, event: EngineEvent) -> None:
         """Stays synchronous because kfchess is a synchronous engine and this

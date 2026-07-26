@@ -212,4 +212,8 @@ def build_server_from_path(path: Optional[Union[str, Path]] = DEFAULT_CONFIG_PAT
 
 
 if __name__ == "__main__":  # pragma: no cover
-    build_server_from_path()
+    import asyncio
+
+    from server.presentation.ws_server import run_server
+
+    asyncio.run(run_server(build_server_from_path()))

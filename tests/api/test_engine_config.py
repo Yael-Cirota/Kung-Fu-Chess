@@ -1,4 +1,4 @@
-from kfchess.api.engine_config import EngineConfig
+from kfchess.api.engine_config import EngineConfig, point_values_from_symbols
 from kfchess.model.piece import PieceKind
 from kfchess.realtime.cooldown import DEFAULT_JUMP_COOLDOWN_MS, DEFAULT_MOVE_COOLDOWN_MS
 from kfchess.realtime.movement_profile import MOVE_DURATION_MS_PER_CELL
@@ -27,3 +27,13 @@ class TestDefaults:
         config = EngineConfig(move_duration_ms_per_cell=250, point_values={PieceKind.PAWN: 42})
         assert config.move_duration_ms_per_cell == 250
         assert config.point_values == {PieceKind.PAWN: 42}
+
+
+class TestPointValuesFromSymbols:
+    def test_converts_symbol_keys_to_piece_kinds(self):
+        assert point_values_from_symbols({"P": 1, "Q": 9}) == {PieceKind.PAWN: 1, PieceKind.QUEEN: 9}
+
+    def test_result_is_usable_directly_as_engine_config_point_values(self):
+        config = EngineConfig(point_values=point_values_from_symbols({"P": 1, "N": 3, "B": 3, "R": 5, "Q": 9, "K": 10}))
+        for kind in PieceKind:
+            assert config.point_values[kind] > 0

@@ -48,6 +48,7 @@ class JoinResult:
 class RoomErrorReason:
     ROOM_NOT_FOUND = "room_not_found"
     ROOM_FULL = "room_full"
+    UNAUTHENTICATED = "unauthenticated"
 
 
 @runtime_checkable

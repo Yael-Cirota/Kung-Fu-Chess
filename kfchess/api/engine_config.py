@@ -20,3 +20,12 @@ class EngineConfig:
     move_cooldown_ms: int = DEFAULT_MOVE_COOLDOWN_MS
     jump_cooldown_ms: int = DEFAULT_JUMP_COOLDOWN_MS
     point_values: Mapping[PieceKind, int] = field(default_factory=lambda: dict(POINT_VALUES))
+
+
+def point_values_from_symbols(values: Mapping[str, int]) -> Mapping[PieceKind, int]:
+    """Converts a wire/config-friendly {"P": 1, ...} mapping into the
+    PieceKind-keyed mapping EngineConfig.point_values needs - the one seam
+    through which a caller outside kfchess (e.g. the server composition root,
+    building EngineConfig from TOML) can populate this field without ever
+    importing kfchess.model.piece.PieceKind itself."""
+    return {PieceKind(symbol): points for symbol, points in values.items()}

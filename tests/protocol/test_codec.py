@@ -59,6 +59,12 @@ class TestServerToClientRoundTrip:
     def test_room_joined(self):
         roundtrip(m.RoomJoined(room_id="r1", role="viewer", players=["alice", "bob"]))
 
+    def test_room_error(self):
+        roundtrip(m.RoomError(room_id="r1", reason="room_full"))
+
+    def test_room_error_with_no_room_id(self):
+        roundtrip(m.RoomError(room_id=None, reason="unauthenticated"))
+
     def test_game_started(self):
         roundtrip(m.GameStarted(server_ms=0, rows=8, cols=8))
 

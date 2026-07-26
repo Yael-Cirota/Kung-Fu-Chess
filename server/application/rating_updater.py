@@ -17,6 +17,7 @@ from typing import Dict, Optional, Set
 from common.events import Event, EventBus, EventNames
 from server.application.elo import EloCalculator
 from server.application.game_room import GameRoom
+from server.infrastructure.db_writer import DbWriter, InlineDbWriter
 from server.infrastructure.repositories import GameRecordRepository, UserRepository
 
 WHITE = "white"
@@ -38,11 +39,13 @@ class RatingUpdater:
         users: UserRepository,
         game_records: GameRecordRepository,
         elo_calculator: EloCalculator,
+        db_writer: Optional[DbWriter] = None,
     ):
         self._rooms = rooms
         self._users = users
         self._game_records = game_records
         self._elo_calculator = elo_calculator
+        self._db_writer = db_writer if db_writer is not None else InlineDbWriter()
         self._settled: Set[str] = set()
         bus.subscribe(EventNames.GAME_OVER, self._on_game_over)
 
@@ -66,12 +69,13 @@ class RatingUpdater:
         if winner_id is not None:
             self._apply_elo(winner_id, seats[_opponent(winner_color)])
 
-        self._game_records.record_result(
-            white_id=white_id,
-            black_id=black_id,
-            winner_id=winner_id,
-            ended_at_ms=self._ended_at_ms(event, room),
-            reason=event.payload.get("reason") or KING_CAPTURED,
+        self._db_writer.submit(
+            self._game_records.record_result,
+            white_id,
+            black_id,
+            winner_id,
+            self._ended_at_ms(event, room),
+            event.payload.get("reason") or KING_CAPTURED,
         )
 
     def _winner_color(self, event: Event) -> Optional[str]:
@@ -93,5 +97,5 @@ class RatingUpdater:
         if winner is None or loser is None:
             return
         new_winner_elo, new_loser_elo = self._elo_calculator.updated(winner.elo, loser.elo)
-        self._users.update_elo(winner_id, new_winner_elo)
-        self._users.update_elo(loser_id, new_loser_elo)
+        self._db_writer.submit(self._users.update_elo, winner_id, new_winner_elo)
+        self._db_writer.submit(self._users.update_elo, loser_id, new_loser_elo)

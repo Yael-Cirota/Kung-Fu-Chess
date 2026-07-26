@@ -169,6 +169,46 @@ class TestSeatedUserIds:
         assert room.player_user_ids() == {"white": 11}
 
 
+class TestRemoveSeat:
+    def test_removes_the_seated_players_connection(self):
+        room = make_room()
+        room.assign_seat("white", WHITE_CONN, user_id=11)
+
+        room.remove_seat(WHITE_CONN)
+
+        assert room.player_user_ids() == {}
+        assert room.connection_ids() == []
+
+    def test_removes_a_viewer(self):
+        room = make_room()
+        room.add_viewer(VIEWER_CONN)
+
+        room.remove_seat(VIEWER_CONN)
+
+        assert room.connection_ids() == []
+
+    def test_returns_true_once_the_room_is_left_empty(self):
+        room = make_room()
+        room.assign_seat("white", WHITE_CONN, user_id=11)
+
+        assert room.remove_seat(WHITE_CONN) is True
+
+    def test_returns_false_while_other_seats_remain(self):
+        room = make_room()
+        room.assign_seat("white", WHITE_CONN, user_id=11)
+        room.assign_seat("black", BLACK_CONN, user_id=22)
+
+        assert room.remove_seat(WHITE_CONN) is False
+        assert room.player_user_ids() == {"black": 22}
+
+    def test_an_unknown_connection_is_a_no_op(self):
+        room = make_room()
+        room.assign_seat("white", WHITE_CONN, user_id=11)
+
+        assert room.remove_seat(ConnectionId("ghost")) is False
+        assert room.player_user_ids() == {"white": 11}
+
+
 class TestQueueDraining:
     def test_move_enqueued_before_tick_is_applied_that_tick(self):
         ws = FakeWebSocketManager()

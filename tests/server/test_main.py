@@ -1,10 +1,17 @@
 import asyncio
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 
 from common.config.schema import AppConfig
 from common.events import Event, EventNames, InMemoryEventBus
+from common.tracing import SequentialTraceIdGenerator
+from protocol import codec, messages as m
+from server.application.match_room_coordinator import MatchRoomCoordinator
+from server.application.matchmaking import Match, MatchTicket
+from server.domain.client_session import ClientSession
+from server.domain.connection_id import ConnectionId
 from server.main import SERVER_LOGGER_NAME, Server, build_server, build_server_from_path
 from server.presentation.dispatcher import MessageDispatcher
 
@@ -49,6 +56,61 @@ class TestAssembly:
 
         assert server.dispatcher._rooms is server.rooms
         assert server.ticker._rooms is server.rooms
+
+    def test_match_room_coordinator_and_db_executor_are_wired(self, tmp_path):
+        server = build_server(make_config(tmp_path))
+
+        assert isinstance(server.match_room_coordinator, MatchRoomCoordinator)
+        assert isinstance(server.db_executor, ThreadPoolExecutor)
+
+
+class TestCreateRoomRequestEndToEnd:
+    """The dispatcher's room_factory closure actually builds a playable
+    GameRoom, wired to the same bus/websocket_manager as everything else."""
+
+    def test_create_then_join_seats_both_players_and_starts_the_game(self, tmp_path):
+        server = build_server(make_config(tmp_path))
+        server.client_sessions.bind(
+            ClientSession(ConnectionId("host"), 1, "alice", 1200, room_id=None, role=None, epoch=1)
+        )
+        server.client_sessions.bind(
+            ClientSession(ConnectionId("guest"), 2, "bob", 1200, room_id=None, role=None, epoch=1)
+        )
+
+        created = codec.decode(asyncio.run(
+            server.dispatcher.dispatch(ConnectionId("host"), codec.encode(m.CreateRoomRequest()), now_ms=0)
+        ))
+        assert isinstance(created, m.RoomCreated)
+
+        joined = codec.decode(asyncio.run(
+            server.dispatcher.dispatch(
+                ConnectionId("guest"),
+                codec.encode(m.JoinRoomRequest(room_id=created.room_id)),
+                now_ms=0,
+            )
+        ))
+
+        assert joined == m.RoomJoined(room_id=created.room_id, role="black", players=["alice", "bob"])
+        assert server.rooms[created.room_id].player_user_ids() == {"white": 1, "black": 2}
+
+
+class TestMatchmakingEndToEnd:
+    def test_two_queued_players_within_the_elo_window_get_a_seated_room(self, tmp_path):
+        server = build_server(make_config(tmp_path))
+        server.client_sessions.bind(
+            ClientSession(ConnectionId("c1"), 1, "alice", 1200, room_id=None, role=None, epoch=1)
+        )
+        server.client_sessions.bind(
+            ClientSession(ConnectionId("c2"), 2, "bob", 1210, room_id=None, role=None, epoch=1)
+        )
+
+        asyncio.run(server.dispatcher.dispatch(ConnectionId("c1"), codec.encode(m.PlayRequest()), now_ms=0))
+        asyncio.run(server.dispatcher.dispatch(ConnectionId("c2"), codec.encode(m.PlayRequest()), now_ms=0))
+
+        room_id = server.client_sessions.get(ConnectionId("c1")).room_id
+        assert room_id is not None
+        assert server.client_sessions.get(ConnectionId("c2")).room_id == room_id
+        assert server.rooms[room_id].player_user_ids() == {"white": 1, "black": 2}
 
 
 class TestConfigIsHonored:

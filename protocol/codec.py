@@ -26,6 +26,7 @@ _TYPE_TO_CLASS: Dict[str, Type] = {
     "match_timed_out": m.MatchTimedOut,
     "room_created": m.RoomCreated,
     "room_joined": m.RoomJoined,
+    "room_error": m.RoomError,
     "game_started": m.GameStarted,
     "state_update": m.StateUpdate,
     "move_ack": m.MoveAck,

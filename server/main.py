@@ -2,18 +2,20 @@
 and hands them to each other. Everything below this module receives its
 collaborators injected and knows nothing about how they were built.
 
-`build_server` is deliberately transport-free - it assembles config, logging,
-the event bus and the application/presentation services, and stops there. The
-live websockets accept/read loop and MATCH_FOUND -> room orchestration are
-Phase 4 concerns (see MessageDispatcher's docstring); `rooms` starts empty and
-is the dict those will populate.
-"""
+`build_server` is transport-free - it assembles config, logging, the event
+bus, and the full application/presentation object graph, including room
+creation (manual and matchmade) and the single-worker DB executor. The only
+things left to Phase 4's transport adapter (`server/presentation/ws_server.py`
++ `run_server`, below) are the live websockets accept/read loop and the
+asyncio driver that calls `ticker.tick`/`dispatcher.dispatch`."""
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Optional, Union
 
+from kfchess.api import EngineConfig, point_values_from_symbols
 from common.config.loader import load_config
 from common.config.schema import AppConfig
 from common.events import EventBus, InMemoryEventBus
@@ -24,13 +26,15 @@ from server.application.auth_service import AuthService, Pbkdf2PasswordHasher
 from server.application.broadcast_observer import BroadcastObserver
 from server.application.disconnect_policy import DisconnectPolicy
 from server.application.elo import EloCalculator
-from server.application.game_room import GameRoom
+from server.application.game_room import GameRoom, create_game_room
+from server.application.match_room_coordinator import MatchRoomCoordinator
 from server.application.matchmaking import MatchmakingService
 from server.application.room_service import RoomService, SecretsRoomIdGenerator
 from server.application.rating_updater import RatingUpdater
 from server.application.room_ticker import RoomTicker
 from server.domain.client_session import InMemoryClientSessionRegistry
 from server.infrastructure.connection_factory import create_connection
+from server.infrastructure.db_writer import ThreadPoolDbWriter
 from server.infrastructure.sqlite_game_record_repository import SqliteGameRecordRepository
 from server.infrastructure.sqlite_user_repository import SqliteUserRepository
 from server.presentation.connection import ConnectionRegistry
@@ -40,6 +44,11 @@ from server.presentation.heartbeat import ConnectionMonitor
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "default.toml"
 
 SERVER_LOGGER_NAME = "kfchess.server"
+
+# ELO/game-record persistence on GAME_OVER is the only off-tick DB write; a
+# single worker matches sqlite3's single-writer model (see 'Blocking work
+# never runs on the event loop').
+DB_EXECUTOR_MAX_WORKERS = 1
 
 
 @dataclass(frozen=True)
@@ -64,6 +73,8 @@ class Server:
     matchmaking_service: MatchmakingService
     elo_calculator: EloCalculator
     rating_updater: RatingUpdater
+    match_room_coordinator: MatchRoomCoordinator
+    db_executor: ThreadPoolExecutor
     dispatcher: MessageDispatcher
     ticker: RoomTicker
 
@@ -109,12 +120,46 @@ def build_server(config: AppConfig) -> Server:
         timeout_ms=config.matchmaking.timeout_ms,
     )
     elo_calculator = EloCalculator(k_factor=config.matchmaking.k_factor)
+    db_executor = ThreadPoolExecutor(max_workers=DB_EXECUTOR_MAX_WORKERS)
     rating_updater = RatingUpdater(
         bus=bus,
         rooms=rooms,
         users=users,
         game_records=game_records,
         elo_calculator=elo_calculator,
+        db_writer=ThreadPoolDbWriter(db_executor),
+    )
+
+    engine_config = EngineConfig(
+        move_duration_ms_per_cell=config.engine.move_duration_ms_per_cell,
+        jump_duration_ms=config.engine.jump_duration_ms,
+        move_cooldown_ms=config.engine.move_cooldown_ms,
+        jump_cooldown_ms=config.engine.jump_cooldown_ms,
+        point_values=point_values_from_symbols(config.engine.point_values),
+    )
+
+    def build_room(room_id: str) -> GameRoom:
+        return create_game_room(
+            room_id,
+            config.engine.starting_board,
+            websocket_manager,
+            bus=bus,
+            trace_id_generator=trace_id_generator,
+            engine_config=engine_config,
+            broadcast_hz=config.server.broadcast_hz,
+            max_engine_step_ms=config.server.max_engine_step_ms,
+        )
+
+    # A separate id generator from RoomService's: manually-created rooms get
+    # their id from the host's CreateRoomRequest (via RoomService), matchmade
+    # rooms have no such request to draw an id from and mint their own here.
+    matched_room_ids = SecretsRoomIdGenerator(config.rooms.room_id_length)
+    match_room_coordinator = MatchRoomCoordinator(
+        bus=bus,
+        rooms=rooms,
+        websocket_manager=websocket_manager,
+        client_sessions=client_sessions,
+        room_factory=lambda: build_room(matched_room_ids.next_id()),
     )
 
     dispatcher = MessageDispatcher(
@@ -126,6 +171,9 @@ def build_server(config: AppConfig) -> Server:
         disconnect_policy=disconnect_policy,
         trace_id_generator=trace_id_generator,
         max_frame_bytes=config.connection.max_frame_bytes,
+        room_service=room_service,
+        matchmaking_service=matchmaking_service,
+        room_factory=build_room,
     )
     ticker = RoomTicker(
         rooms=rooms,
@@ -151,6 +199,8 @@ def build_server(config: AppConfig) -> Server:
         matchmaking_service=matchmaking_service,
         elo_calculator=elo_calculator,
         rating_updater=rating_updater,
+        match_room_coordinator=match_room_coordinator,
+        db_executor=db_executor,
         dispatcher=dispatcher,
         ticker=ticker,
     )

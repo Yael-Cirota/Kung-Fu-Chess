@@ -16,6 +16,11 @@ class TestDefaults:
     def test_engine_config_default_point_values(self):
         assert EngineConfigData().point_values == {"P": 1, "N": 3, "B": 3, "R": 5, "Q": 9, "K": 10}
 
+    def test_engine_config_default_starting_board_is_a_full_chess_setup(self):
+        board = EngineConfigData().starting_board
+        assert board.splitlines()[0].split() == ["bR", "bN", "bB", "bQ", "bK", "bB", "bN", "bR"]
+        assert board.splitlines()[-1].split() == ["wR", "wN", "wB", "wQ", "wK", "wB", "wN", "wR"]
+
     def test_configs_are_frozen(self):
         config = AppConfig()
         try:

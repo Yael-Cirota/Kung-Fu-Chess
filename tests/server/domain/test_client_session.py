@@ -53,6 +53,17 @@ class TestUpdateRoom:
         registry = make_registry()
         registry.update_room(ConnectionId("ghost"), "room-1", "white")  # must not raise
 
+    def test_none_room_and_role_clears_the_binding(self):
+        registry = make_registry()
+        registry.bind(ClientSession(ConnectionId("c1"), 1, "alice", 1200, None, None, 1))
+        registry.update_room(ConnectionId("c1"), "room-1", "white")
+
+        registry.update_room(ConnectionId("c1"), None, None)
+
+        session = registry.get(ConnectionId("c1"))
+        assert session.room_id is None
+        assert session.role is None
+
 
 class TestRelease:
     def test_removes_the_connection_and_user_binding(self):

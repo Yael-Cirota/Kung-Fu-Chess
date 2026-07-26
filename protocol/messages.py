@@ -100,6 +100,12 @@ class RoomJoined:
 
 
 @dataclass(frozen=True)
+class RoomError:
+    room_id: Optional[str]
+    reason: str
+
+
+@dataclass(frozen=True)
 class GameStarted:
     server_ms: int
     rows: int

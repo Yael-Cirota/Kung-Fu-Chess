@@ -79,6 +79,20 @@ class GameRoom:
         elif self.status is not RoomStatus.WAITING:
             self._send_join_in_progress(conn_id)
 
+    def remove_seat(self, conn_id: ConnectionId) -> bool:
+        """LeaveRoomRequest, for a room that never started: only meaningful
+        while WAITING (the dispatcher gates on that), since a seated player in
+        a RUNNING room leaves via the disconnect/forced-resign path instead.
+        Returns True once the room holds no seats or viewers, so the caller
+        can drop it from the room registry."""
+        for role, seat_conn_id in list(self._seats.items()):
+            if seat_conn_id == conn_id:
+                del self._seats[role]
+                self._seat_user_ids.pop(role, None)
+        if conn_id in self._viewer_conn_ids:
+            self._viewer_conn_ids.remove(conn_id)
+        return not self._seats and not self._viewer_conn_ids
+
     def add_viewer(self, conn_id: ConnectionId) -> None:
         self._viewer_conn_ids.append(conn_id)
         if self.status is not RoomStatus.WAITING:

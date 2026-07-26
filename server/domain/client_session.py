@@ -36,7 +36,7 @@ class ClientSessionRegistry(Protocol):
 
     def by_user(self, user_id: int) -> Optional[ClientSession]: ...
 
-    def update_room(self, conn_id: ConnectionId, room_id: str, role: str) -> None: ...
+    def update_room(self, conn_id: ConnectionId, room_id: Optional[str], role: Optional[str]) -> None: ...
 
     def release(self, conn_id: ConnectionId) -> None: ...
 
@@ -67,7 +67,9 @@ class InMemoryClientSessionRegistry:
         conn_id = self._by_user.get(user_id)
         return self._by_connection.get(conn_id) if conn_id is not None else None
 
-    def update_room(self, conn_id: ConnectionId, room_id: str, role: str) -> None:
+    def update_room(self, conn_id: ConnectionId, room_id: Optional[str], role: Optional[str]) -> None:
+        """`room_id=None, role=None` clears a session's room binding - the
+        LeaveRoomRequest path, for a room that never started."""
         session = self._by_connection.get(conn_id)
         if session is not None:
             self._by_connection[conn_id] = replace(session, room_id=room_id, role=role)

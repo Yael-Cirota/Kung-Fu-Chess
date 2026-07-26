@@ -203,6 +203,33 @@ class TestSettlementIsIdempotent:
         assert len(records.records) == 2
 
 
+class SpyDbWriter:
+    def __init__(self):
+        self.submitted = []
+
+    def submit(self, fn, *args):
+        self.submitted.append((fn, args))
+        fn(*args)
+
+
+class TestDbWriterRouting:
+    def test_persistence_calls_go_through_the_db_writer_not_directly(self):
+        rooms = {"room-1": FakeRoom()}
+        users = FakeUserRepository({WHITE_ID: 1200, BLACK_ID: 1200})
+        game_records = FakeGameRecordRepository()
+        bus = InMemoryEventBus()
+        db_writer = SpyDbWriter()
+        RatingUpdater(bus, rooms, users, game_records, EloCalculator(), db_writer=db_writer)
+
+        publish(bus, resign_event(resigned_color="white"))
+
+        # two elo updates + one game record, all fired through the writer
+        assert len(db_writer.submitted) == 3
+        # and still actually applied, since SpyDbWriter runs fn inline
+        assert users.updates == [(BLACK_ID, 1216), (WHITE_ID, 1184)]
+        assert len(game_records.records) == 1
+
+
 class TestUnratedSituations:
     def test_an_unknown_room_is_ignored(self):
         bus, users, records, _u = make_updater(FakeRoom())

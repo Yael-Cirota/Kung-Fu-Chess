@@ -10,6 +10,19 @@ def _default_point_values() -> Mapping[str, int]:
     return {"P": 1, "N": 3, "B": 3, "R": 5, "Q": 9, "K": 10}
 
 
+def _default_starting_board() -> str:
+    return (
+        "bR bN bB bQ bK bB bN bR\n"
+        "bP bP bP bP bP bP bP bP\n"
+        ".  .  .  .  .  .  .  .\n"
+        ".  .  .  .  .  .  .  .\n"
+        ".  .  .  .  .  .  .  .\n"
+        ".  .  .  .  .  .  .  .\n"
+        "wP wP wP wP wP wP wP wP\n"
+        "wR wN wB wQ wK wB wN wR"
+    )
+
+
 @dataclass(frozen=True)
 class EngineConfigData:
     move_duration_ms_per_cell: int = 1000
@@ -17,6 +30,7 @@ class EngineConfigData:
     move_cooldown_ms: int = 1000
     jump_cooldown_ms: int = 500
     point_values: Mapping[str, int] = field(default_factory=_default_point_values)
+    starting_board: str = field(default_factory=_default_starting_board)
 
 
 @dataclass(frozen=True)

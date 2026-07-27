@@ -520,6 +520,71 @@ class TestJoinRoomRequest:
         assert rooms[host_room.room_id].assigned_seats == [(Role.BLACK, ConnectionId("c2"), 2)]
         assert dispatcher._client_sessions.get(ConnectionId("c2")).role == Role.BLACK
 
+    def test_the_second_join_pushes_room_joined_to_the_host_too(self):
+        """The host only ever got RoomCreated as a synchronous response - with
+        nothing else, they would never learn a second player showed up (unlike
+        matchmaking, where MatchRoomCoordinator pushes MatchFound to both
+        sides). This is the manual-room equivalent push."""
+        room_service = RoomService(SequentialRoomIdGenerator())
+        host_room = room_service.create(PlayerRef(user_id=1, username="alice"))
+        rooms = {host_room.room_id: SpyRoom(status=RoomStatus.WAITING)}
+        dispatcher, _ = make_dispatcher(rooms=rooms, room_service=room_service)
+        host_connection = FakeConnection("c1")
+        dispatcher._websocket_manager.register(host_connection)
+        sent = []
+        host_connection.send = lambda raw: sent.append(codec.decode(raw))
+        dispatcher._client_sessions.bind(
+            ClientSession(ConnectionId("c1"), 1, "alice", 1200, room_id=host_room.room_id, role="white", epoch=1)
+        )
+        dispatcher._client_sessions.bind(
+            ClientSession(ConnectionId("c2"), 2, "bob", 1200, room_id=None, role=None, epoch=1)
+        )
+        raw = codec.encode(m.JoinRoomRequest(room_id=host_room.room_id))
+
+        run(dispatcher.dispatch(ConnectionId("c2"), raw, now_ms=0))
+
+        assert sent == [m.RoomJoined(room_id=host_room.room_id, role=Role.WHITE, players=["alice", "bob"])]
+
+    def test_a_third_viewer_joining_does_not_re_notify_the_seated_players(self):
+        room_service = RoomService(SequentialRoomIdGenerator())
+        host_room = room_service.create(PlayerRef(user_id=1, username="alice"))
+        room_service.join(host_room.room_id, PlayerRef(user_id=2, username="bob"))
+        rooms = {host_room.room_id: SpyRoom(status=RoomStatus.RUNNING)}
+        dispatcher, _ = make_dispatcher(rooms=rooms, room_service=room_service)
+        host_connection = FakeConnection("c1")
+        dispatcher._websocket_manager.register(host_connection)
+        sent = []
+        host_connection.send = lambda raw: sent.append(codec.decode(raw))
+        dispatcher._client_sessions.bind(
+            ClientSession(ConnectionId("c1"), 1, "alice", 1200, room_id=host_room.room_id, role="white", epoch=1)
+        )
+        dispatcher._client_sessions.bind(
+            ClientSession(ConnectionId("c3"), 3, "carol", 1200, room_id=None, role=None, epoch=1)
+        )
+        raw = codec.encode(m.JoinRoomRequest(room_id=host_room.room_id))
+
+        response = codec.decode(run(dispatcher.dispatch(ConnectionId("c3"), raw, now_ms=0)))
+
+        assert response.role == Role.VIEWER
+        assert sent == []
+
+    def test_the_host_is_not_notified_when_they_are_not_bound(self):
+        """The already-covered case: joining still works even if the other
+        seat's connection was never registered as a ClientSession (e.g. it
+        disconnected between creating the room and the second join)."""
+        room_service = RoomService(SequentialRoomIdGenerator())
+        host_room = room_service.create(PlayerRef(user_id=1, username="alice"))
+        rooms = {host_room.room_id: SpyRoom(status=RoomStatus.WAITING)}
+        dispatcher, _ = make_dispatcher(rooms=rooms, room_service=room_service)
+        dispatcher._client_sessions.bind(
+            ClientSession(ConnectionId("c2"), 2, "bob", 1200, room_id=None, role=None, epoch=1)
+        )
+        raw = codec.encode(m.JoinRoomRequest(room_id=host_room.room_id))
+
+        response = codec.decode(run(dispatcher.dispatch(ConnectionId("c2"), raw, now_ms=0)))
+
+        assert response == m.RoomJoined(room_id=host_room.room_id, role=Role.BLACK, players=["alice", "bob"])
+
 
 class TestLeaveRoomRequest:
     def test_unbound_connection_is_a_no_op(self):

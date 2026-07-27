@@ -1,4 +1,5 @@
 from client.net.client_link import ClientLink
+from protocol import messages as m
 
 
 class TestSend:
@@ -38,3 +39,21 @@ class TestDrainShell:
 
         assert link.drain_shell() == ["shell-message"]
         assert link.drain_game() == ["game-message"]
+
+
+class TestReceive:
+    def test_routes_a_game_message_onto_inbound_game(self):
+        link = ClientLink()
+
+        link.receive(m.HeartbeatAck(client_ms=1, server_ms=2))
+
+        assert link.drain_game() == [m.HeartbeatAck(client_ms=1, server_ms=2)]
+        assert link.drain_shell() == []
+
+    def test_routes_a_shell_message_onto_inbound_shell(self):
+        link = ClientLink()
+
+        link.receive(m.AuthOk(user_id=1, username="a", elo=1200))
+
+        assert link.drain_shell() == [m.AuthOk(user_id=1, username="a", elo=1200)]
+        assert link.drain_game() == []

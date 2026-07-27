@@ -228,8 +228,26 @@ class MessageDispatcher:
         role = result.value.role
         game_room.assign_seat(role, conn_id, user_id=session.user_id)
         self._client_sessions.update_room(conn_id, request.room_id, role)
-        players = [p.username for p in result.value.room.players]
+        room = result.value.room
+        players = [p.username for p in room.players]
+        if len(room.players) == 2:
+            # This join is the one that fills the second seat: the matchmaking
+            # path has MatchRoomCoordinator push MatchFound to both sides, but
+            # a manually-created room's host only ever got RoomCreated - with
+            # nothing else, they would never learn a second player showed up.
+            self._notify_other_players_room_started(room, joined_conn_id=conn_id, players=players)
         return codec.encode(m.RoomJoined(room_id=request.room_id, role=role, players=players))
+
+    def _notify_other_players_room_started(self, room, joined_conn_id: ConnectionId, players: list) -> None:
+        for index, player in enumerate(room.players):
+            other_session = self._client_sessions.by_user(player.user_id)
+            if other_session is None or other_session.connection_id == joined_conn_id:
+                continue
+            other_role = room.role_for_index(index)
+            self._websocket_manager.send_to(
+                other_session.connection_id,
+                codec.encode(m.RoomJoined(room_id=room.room_id, role=other_role, players=players)),
+            )
 
     def _handle_leave_room_request(self, conn_id: ConnectionId, request: m.LeaveRoomRequest) -> None:
         session = self._client_sessions.get(conn_id)

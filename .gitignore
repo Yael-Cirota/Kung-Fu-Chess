@@ -22,3 +22,7 @@ ui/rendered_board.png
 
 # Claude Code local plan files
 .claude/plans/
+
+# Runtime artifacts
+kfchess.db
+server.log

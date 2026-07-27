@@ -110,6 +110,44 @@ class TestDelegatedReads:
         assert session.scoreboard() == Scoreboard(white=0, black=0)
 
 
+class TestElapsedMs:
+    def test_tracks_wall_clock_ticks_since_construction(self):
+        clock = ManualClock(1000)
+        session = RemoteGameSession(ClientLink(), clock=clock)
+
+        assert session.elapsed_ms() == 0
+
+        clock.advance(250)
+
+        assert session.elapsed_ms() == 250
+
+
+class TestResetClockOrigin:
+    def test_re_anchors_elapsed_ms_to_now(self):
+        clock = ManualClock(0)
+        session = RemoteGameSession(ClientLink(), clock=clock)
+        clock.advance(60_000)
+
+        session.reset_clock_origin()
+
+        assert session.elapsed_ms() == 0
+
+    def test_discards_a_prior_snapshot_so_the_next_one_snaps_fresh(self):
+        clock = ManualClock(0)
+        link = ClientLink()
+        session = RemoteGameSession(link, clock=clock)
+        clock.advance(60_000)
+        link.inbound_game.put(m.GameStarted(server_ms=0, rows=8, cols=8))
+        session.wait(0)
+        assert session.clock_ms == 60_000
+
+        session.reset_clock_origin()
+        link.inbound_game.put(m.GameStarted(server_ms=0, rows=8, cols=8))
+        session.wait(0)
+
+        assert session.clock_ms == 0
+
+
 class TestHeartbeatAckHandling:
     def test_a_heartbeat_ack_feeds_the_clock_estimator(self):
         link = ClientLink()

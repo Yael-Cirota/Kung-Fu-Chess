@@ -40,6 +40,16 @@ class ServerConfigData:
     tick_hz: int = 100
     broadcast_hz: int = 20
     max_engine_step_ms: int = 100
+    # Passed straight to websockets.serve(compression=...); "" disables
+    # permessage-deflate. A config knob (not a constant) because §10 of the
+    # scaling plan flags compression CPU-vs-bandwidth as something that needs
+    # measuring under load, not assuming.
+    compression: str = "deflate"
+    # Which Server_Design.md §2 role this process runs as, and which region
+    # it's deployed in. "monolith" is today's single-process default; the
+    # per-role entry points (server.roles.*) set this to their own name.
+    role: str = "monolith"
+    region: str = "local"
 
 
 @dataclass(frozen=True)
@@ -70,6 +80,23 @@ class DatabaseConfigData:
 
 
 @dataclass(frozen=True)
+class RedisConfigData:
+    # Server_Design.md §1.1/§2: shared state (sessions, room directory,
+    # matchmaking queue) that today lives in in-process dicts. Unused until
+    # §2's role split lands; present now so KFC_REDIS_URL round-trips through
+    # the generic env-override rule.
+    url: str = "redis://127.0.0.1:6379"
+
+
+@dataclass(frozen=True)
+class PgConfigData:
+    # Server_Design.md §1: replaces SqliteUserRepository/
+    # SqliteGameRecordRepository at scale. Empty by default - unused (and
+    # unvalidated) until that migration happens.
+    dsn: str = ""
+
+
+@dataclass(frozen=True)
 class LoggingConfigData:
     level: str = "INFO"
     client_file: str = "client.log"
@@ -96,5 +123,7 @@ class AppConfig:
     connection: ConnectionConfigData = field(default_factory=ConnectionConfigData)
     rooms: RoomsConfigData = field(default_factory=RoomsConfigData)
     database: DatabaseConfigData = field(default_factory=DatabaseConfigData)
+    redis: RedisConfigData = field(default_factory=RedisConfigData)
+    pg: PgConfigData = field(default_factory=PgConfigData)
     logging: LoggingConfigData = field(default_factory=LoggingConfigData)
     client: ClientConfigData = field(default_factory=ClientConfigData)

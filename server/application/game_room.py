@@ -21,6 +21,15 @@ _ENGINE_EVENT_TO_BUS_NAME = {
     EngineEventKind.GAME_OVER: EventNames.GAME_OVER,
 }
 
+# Every StateUpdate - periodic broadcast or join/resync - caps move_log to
+# this many trailing entries. A scrolling move-log UI only needs recent
+# history, and SnapshotStore.apply_state_update replaces its move_log
+# wholesale on each StateUpdate (it doesn't merge), so a fuller log on
+# join would just be overwritten by the next periodic broadcast anyway.
+# This keeps per-tick payload size flat across a match instead of growing
+# unboundedly with it.
+_BROADCAST_MOVE_LOG_LIMIT = 20
+
 
 class GameRoom:
     def __init__(
@@ -99,7 +108,12 @@ class GameRoom:
     def _send_join_in_progress(self, conn_id: ConnectionId) -> None:
         """A late joiner (spectator or reconnecting player) gets GameStarted
         immediately followed by the current StateUpdate - exactly the
-        ClockEstimator mid-game rebasing path built for on the client side."""
+        ClockEstimator mid-game rebasing path built for on the client side.
+        Same capped move_log as periodic broadcasts (not the full history):
+        SnapshotStore.apply_state_update replaces its move_log wholesale on
+        every StateUpdate, so a fuller log sent here would just be
+        overwritten by the next periodic broadcast a few ticks later - it
+        can't actually reach the client durably."""
         self._websocket_manager.send_to(conn_id, codec.encode(self._game_started_message()))
         self._websocket_manager.send_to(conn_id, codec.encode(self._state_update_message()))
 
@@ -162,7 +176,7 @@ class GameRoom:
             seq=self._seq,
             pieces=snapshot.pieces(),
             motions=self._motion_entries(snapshot),
-            move_log=self.session.move_log(),
+            move_log=self.session.move_log()[-_BROADCAST_MOVE_LOG_LIMIT:],
             scoreboard=self.session.scoreboard(),
             game_over=self.session.game_over,
         )

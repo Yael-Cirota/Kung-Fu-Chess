@@ -1,0 +1,58 @@
+# Server_Design.md §12.5: this file is target-shaped, not a claim about
+# what runs today. `server` is the existing all-in-one process
+# (server/main.py) and is fully runnable. The five commented-out services
+# below name §2's target per-role processes (server.roles.<role>); those
+# entry points don't exist in code yet (§2 is a Python refactor this
+# compose file doesn't provide), so they're left commented rather than
+# left to fail on `ModuleNotFoundError` at container start. Uncomment them
+# once §2's role split lands - the shape is already correct.
+#
+# Redis/Postgres are wired up (§1.1/§2/§5) but unused by `server` today:
+# it still reads/writes kfchess.db via SqliteUserRepository. They're
+# included so the target topology can be exercised locally as each piece
+# lands, without editing this file again.
+
+x-kfchess: &kfchess
+  build: .
+  environment: &kfchess-env
+    KFC_HOST: "0.0.0.0"
+    KFC_REDIS_URL: "redis://redis:6379"
+    KFC_PG_DSN: "postgresql://kfchess:kfchess@postgres/kfchess"
+  depends_on:
+    - redis
+
+services:
+  server:
+    <<: *kfchess
+    command: ["python", "-m", "server.main"]
+    ports: ["8765:8765"]
+
+  # --- target roles (Server_Design.md §2) - need server.roles.* first ---
+  # gateway:
+  #   <<: *kfchess
+  #   command: ["python", "-m", "server.roles.gateway"]
+  #   ports: ["8765:8765"]
+  # room-server:
+  #   <<: *kfchess
+  #   command: ["python", "-m", "server.roles.room"]
+  # matchmaker:
+  #   <<: *kfchess
+  #   command: ["python", "-m", "server.roles.matchmaker"]
+  # allocator:
+  #   <<: *kfchess
+  #   command: ["python", "-m", "server.roles.allocator"]
+  # settlement:
+  #   <<: *kfchess
+  #   command: ["python", "-m", "server.roles.settlement"]
+
+  redis:
+    image: "redis:7-alpine"
+    ports: ["6379:6379"]
+
+  postgres:
+    image: "postgres:16-alpine"
+    environment:
+      POSTGRES_USER: kfchess
+      POSTGRES_PASSWORD: kfchess
+      POSTGRES_DB: kfchess
+    ports: ["5432:5432"]

@@ -1,6 +1,15 @@
 import asyncio
 
-from kfchess.api import EngineEvent, EngineEventKind, Position, create_game_session
+from kfchess.api import (
+    BoardSnapshot,
+    EngineEvent,
+    EngineEventKind,
+    MoveLogEntry,
+    MoveResult,
+    Position,
+    Scoreboard,
+    create_game_session,
+)
 from common.events import Event, EventNames, InMemoryEventBus
 from common.tracing import SequentialTraceIdGenerator
 from protocol import codec, messages as m
@@ -338,6 +347,80 @@ class TestBroadcastCadence:
 
         recipients = {conn_id for conn_id, msg in ws.decoded() if isinstance(msg, m.StateUpdate)}
         assert recipients == {WHITE_CONN, BLACK_CONN, VIEWER_CONN}
+
+
+class _FakeSessionWithLog:
+    """Minimal GameSession stand-in exposing only what GameRoom.tick and
+    _state_update_message read, with a move_log long enough to prove the
+    _BROADCAST_MOVE_LOG_LIMIT cap actually truncates rather than just
+    happening to pass because the log was already short."""
+
+    def __init__(self, move_count):
+        self._log = [
+            MoveLogEntry(color="white", symbol="P", from_pos=Position(0, 0), to_pos=Position(0, 1))
+            for _ in range(move_count)
+        ]
+
+    def piece_at(self, pos):
+        return None
+
+    def request_move(self, from_pos, to_pos):
+        return MoveResult.accepted()
+
+    @property
+    def clock_ms(self):
+        return 0
+
+    @property
+    def game_over(self):
+        return False
+
+    def wait(self, ms):
+        return None
+
+    def board_snapshot(self):
+        return BoardSnapshot(rows=1, cols=1, piece_views=[])
+
+    def motion_for(self, piece_id):
+        return None
+
+    def move_log(self):
+        return list(self._log)
+
+    def scoreboard(self):
+        return Scoreboard(white=0, black=0)
+
+
+class TestMoveLogCap:
+    def test_periodic_broadcast_caps_move_log_to_trailing_entries(self):
+        ws = FakeWebSocketManager()
+        room = GameRoom(room_id="room-1", session=_FakeSessionWithLog(30), websocket_manager=ws)
+        room.assign_seat("white", WHITE_CONN)
+        room.assign_seat("black", BLACK_CONN)
+        ws.sent.clear()
+
+        asyncio.run(room.tick(now_ms=0))
+
+        state_update = next(msg for _c, msg in ws.decoded() if isinstance(msg, m.StateUpdate))
+        assert len(state_update.move_log) == 20
+
+    def test_join_in_progress_gets_the_same_capped_log_not_full_history(self):
+        # SnapshotStore.apply_state_update replaces move_log wholesale on
+        # every StateUpdate, so a fuller log sent only on join would be
+        # overwritten by the very next periodic broadcast - the join path
+        # must send the same capped log, not the full one.
+        ws = FakeWebSocketManager()
+        room = GameRoom(room_id="room-1", session=_FakeSessionWithLog(30), websocket_manager=ws)
+        room.assign_seat("white", WHITE_CONN)
+        room.assign_seat("black", BLACK_CONN)  # status -> RUNNING
+        ws.sent.clear()
+
+        room.add_viewer(VIEWER_CONN)  # joins a RUNNING room -> _send_join_in_progress
+
+        state_update = next(
+            msg for c, msg in ws.decoded() if c == VIEWER_CONN and isinstance(msg, m.StateUpdate)
+        )
+        assert len(state_update.move_log) == 20
 
 
 class TestEventBusWiring:

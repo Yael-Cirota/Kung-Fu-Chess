@@ -93,7 +93,8 @@ Use the project venv Python (`.venv\Scripts\python.exe`), or activate first.
 # Setup
 python -m venv .venv
 .venv\Scripts\Activate.ps1
-pip install -e . --group dev      # or: pip install pytest coverage import-linter
+pip install pytest coverage import-linter websockets redis
+pip install opencv-python numpy    # only needed for ui/ and tests/ui/ - see pyproject.toml's [ui] extra
 
 # Run tests
 .venv\Scripts\python.exe -m pytest

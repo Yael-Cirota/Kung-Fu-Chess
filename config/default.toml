@@ -18,6 +18,7 @@ port = 8765
 tick_hz = 100
 broadcast_hz = 20
 max_engine_step_ms = 100
+compression = "deflate"
 
 [matchmaking]
 elo_window = 100
@@ -37,6 +38,12 @@ room_id_length = 6
 
 [database]
 path = "kfchess.db"
+
+[redis]
+url = "redis://127.0.0.1:6379"
+
+[pg]
+dsn = ""
 
 [logging]
 level = "INFO"

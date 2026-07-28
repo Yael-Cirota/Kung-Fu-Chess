@@ -4,9 +4,19 @@ version = "0.1.0"
 description = "Kung-Fu-Chess: a real-time chess variant"
 requires-python = ">=3.11"
 dependencies = [
+    "websockets>=12.0",
+    "redis>=4.2",
+]
+
+[project.optional-dependencies]
+# OpenCV/numpy are only imported under ui/ (the graphics demo) and
+# tests/ui/. Server, client, common, protocol and kfchess never import
+# them, so server-side installs (and containers) skip a ~200MB GUI
+# toolchain. Install with `pip install -e ".[ui]"` to run ui/main.py or
+# the ui test suite.
+ui = [
     "opencv-python>=5.0.0",
     "numpy>=2.5.1",
-    "websockets>=12.0",
 ]
 
 [dependency-groups]
@@ -53,12 +63,27 @@ name = "Server internals layers"
 type = "layers"
 layers = ["server.presentation", "server.application", "server.domain"]
 
+# redis_directory/redis_client don't exist yet (Server_Design.md §2's role
+# split); listed pre-emptively so the contract covers them the moment
+# they're added instead of silently missing new infrastructure.
 [[tool.importlinter.contracts]]
 name = "Infrastructure is reached only through Protocols"
 type = "forbidden"
 source_modules = ["server.domain", "server.application"]
-forbidden_modules = ["server.infrastructure.sqlite_user_repository", "server.infrastructure.connection_factory"]
+forbidden_modules = [
+    "server.infrastructure.sqlite_user_repository", "server.infrastructure.connection_factory",
+    "server.infrastructure.redis_directory", "server.infrastructure.redis_client",
+]
 allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "redis is reached only through server.infrastructure"
+type = "forbidden"
+source_modules = [
+    "kfchess", "common", "protocol", "ui", "client",
+    "server.presentation", "server.application", "server.domain",
+]
+forbidden_modules = ["redis"]
 
 [[tool.importlinter.contracts]]
 name = "Engine and shared layers never import outward"

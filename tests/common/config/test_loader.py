@@ -60,3 +60,35 @@ class TestEnvOverrides:
     def test_unset_env_vars_leave_defaults_untouched(self):
         config = load_config(path=None, env={})
         assert config.database.path == "kfchess.db"
+
+
+class TestGenericEnvOverrideRule:
+    def test_section_field_env_var_overrides_any_config_field(self):
+        config = load_config(
+            path=None,
+            env={
+                "KFC_REDIS_URL": "redis://cache:6379",
+                "KFC_PG_DSN": "postgresql://kfchess@postgres/kfchess",
+                "KFC_SERVER_BROADCAST_HZ": "10",
+                "KFC_SERVER_ROLE": "gateway",
+            },
+        )
+        assert config.redis.url == "redis://cache:6379"
+        assert config.pg.dsn == "postgresql://kfchess@postgres/kfchess"
+        assert config.server.broadcast_hz == 10
+        assert config.server.role == "gateway"
+
+    def test_legacy_alias_still_wins_over_generic_form_of_same_key(self, tmp_path):
+        # KFC_HOST is the pre-existing alias for KFC_SERVER_HOST; both firing
+        # at once should still resolve deterministically to the alias.
+        config = load_config(
+            path=None,
+            env={"KFC_HOST": "0.0.0.0", "KFC_SERVER_HOST": "10.0.0.1"},
+        )
+        assert config.server.host == "0.0.0.0"
+
+    def test_mapping_typed_fields_are_not_env_overridable(self):
+        # point_values is Mapping[str, int]; there's no sane single-value env
+        # encoding for it, so a same-named env var is simply ignored.
+        config = load_config(path=None, env={"KFC_ENGINE_POINT_VALUES": "nonsense"})
+        assert config.engine.point_values == {"P": 1, "N": 3, "B": 3, "R": 5, "Q": 9, "K": 10}

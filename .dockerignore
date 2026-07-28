@@ -1,0 +1,26 @@
+# Server_Design.md §12.3. Beyond image size, this makes the import-linter
+# contracts "Server and ui never see each other" and "ui and client never
+# see the server" physically true inside the image: the forbidden packages
+# are absent, not merely unimported.
+ui/
+client/
+tests/
+.venv/
+.git/
+.claude/
+ui/frames/
+__pycache__/
+**/__pycache__/
+*.db
+*.log
+*.pyc
+
+.dockerignore
+Dockerfile
+Dockerfile.loadtest
+docker-compose.yml
+htmlcov/
+.pytest_cache/
+.import_linter_cache/
+.coverage
+.vscode/

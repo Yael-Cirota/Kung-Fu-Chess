@@ -16,6 +16,7 @@ import websockets
 
 from common.clock import Clock, MonotonicClock
 from server.domain.connection_id import ConnectionId
+from server.presentation.health import ReadinessState, make_process_request
 
 if TYPE_CHECKING:
     # Deferred: server.main is the composition root and imports this module
@@ -100,9 +101,12 @@ async def tick_forever(server: Server, clock: Optional[Clock] = None) -> None:
 async def run_server(server: Server) -> None:  # pragma: no cover - real socket + infinite loop
     """Accepts connections forever while the tick driver runs alongside it.
     Never awaited to completion; the process is killed to stop it."""
+    readiness = ReadinessState()
     async with websockets.serve(
         lambda raw_connection: handle_connection(raw_connection, server),
         server.config.server.host,
         server.config.server.port,
+        compression=server.config.server.compression or None,
+        process_request=make_process_request(readiness),
     ):
         await tick_forever(server)

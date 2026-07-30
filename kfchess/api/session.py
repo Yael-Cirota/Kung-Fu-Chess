@@ -2,6 +2,7 @@ from typing import List, Optional, Protocol, runtime_checkable
 
 from kfchess.api import engine_mapping
 from kfchess.api.dto import BoardSnapshot, MotionInfo, MoveLogEntry, MoveResult, PieceView, Position, Scoreboard
+from kfchess.api.events import EngineEvent, EngineEventKind, EngineEventSink
 from kfchess.engine.game_engine import GameEngine
 
 
@@ -50,8 +51,9 @@ class EngineGameSession:
     grid traversal, piece_id lookup) lives in that mapping module, not here.
     """
 
-    def __init__(self, engine: GameEngine):
+    def __init__(self, engine: GameEngine, event_sink: Optional[EngineEventSink] = None):
         self._engine = engine
+        self._event_sink = event_sink
 
     @property
     def clock_ms(self) -> int:
@@ -76,7 +78,24 @@ class EngineGameSession:
         return self._engine.request_move(from_pos, to_pos)
 
     def wait(self, ms: int) -> None:
-        self._engine.wait(ms)
+        was_over = self._engine.game_over
+        outcomes = self._engine.wait(ms)
+        if self._event_sink is None:
+            return
+        for outcome in outcomes:
+            self._event_sink.emit(engine_mapping.outcome_to_event(outcome, self._engine.clock_ms))
+        if not was_over and self._engine.game_over:
+            self._event_sink.emit(
+                EngineEvent(
+                    kind=EngineEventKind.GAME_OVER,
+                    at_ms=self._engine.clock_ms,
+                    piece=None,
+                    from_pos=None,
+                    to_pos=None,
+                    captured=None,
+                    beneficiary_color=self._engine.winner,
+                )
+            )
 
     def is_moving(self, piece_id: int) -> bool:
         piece = engine_mapping.find_piece_by_id(self._engine.board_grid(), piece_id)

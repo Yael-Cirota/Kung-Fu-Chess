@@ -1,5 +1,6 @@
 from kfchess.api import (
     BoardSnapshot,
+    EngineEventKind,
     GameSession,
     MotionInfo,
     MoveLogEntry,
@@ -8,6 +9,14 @@ from kfchess.api import (
     Scoreboard,
     create_game_session,
 )
+
+
+class FakeEventSink:
+    def __init__(self):
+        self.emitted = []
+
+    def emit(self, event) -> None:
+        self.emitted.append(event)
 
 
 def make_session(text='wR . .\n. . .\nbK . .'):
@@ -161,3 +170,44 @@ class TestScoreboard:
         board = session.scoreboard()
         assert board.white == 10  # king value
         assert board.black == 0
+
+
+class TestEventSink:
+    def test_no_events_emitted_when_sink_is_none(self):
+        # Nothing to assert on directly, but this must not raise -
+        # wait() is a no-op fan-out when there's no sink to notify.
+        session = create_game_session('wR . .\n. . .\nbK . .')
+        session.request_move(Position(0, 0), Position(0, 2))
+        session.wait(2000)
+
+    def test_move_executed_is_emitted_on_a_plain_move(self):
+        sink = FakeEventSink()
+        session = create_game_session('wR . .\n. . .\n. . .', event_sink=sink)
+
+        session.request_move(Position(0, 0), Position(0, 2))
+        session.wait(2000)
+
+        kinds = [event.kind for event in sink.emitted]
+        assert EngineEventKind.MOVE_EXECUTED in kinds
+
+    def test_piece_captured_is_emitted_on_a_capture(self):
+        sink = FakeEventSink()
+        session = create_game_session('wR . bP\n. . .\n. . .', event_sink=sink)
+
+        session.request_move(Position(0, 0), Position(0, 2))
+        session.wait(2000)
+
+        kinds = [event.kind for event in sink.emitted]
+        assert EngineEventKind.PIECE_CAPTURED in kinds
+
+    def test_game_over_is_emitted_exactly_once_when_the_king_is_captured(self):
+        sink = FakeEventSink()
+        session = create_game_session('wR . bK\n. . .\n. . .', event_sink=sink)
+
+        session.request_move(Position(0, 0), Position(0, 2))
+        session.wait(2000)
+        session.wait(2000)  # a second wait after game_over must not re-emit
+
+        game_over_events = [event for event in sink.emitted if event.kind is EngineEventKind.GAME_OVER]
+        assert len(game_over_events) == 1
+        assert game_over_events[0].beneficiary_color == 'w'

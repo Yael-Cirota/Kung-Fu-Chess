@@ -10,6 +10,12 @@ class Color(str, Enum):
     WHITE = 'w'
     BLACK = 'b'
 
+    def opponent(self) -> 'Color':
+        """The other color - the two-player assumption that lets us name the
+        captor in a CAPTURED_ON_ARRIVAL outcome, which records only the
+        captured piece."""
+        return Color.BLACK if self is Color.WHITE else Color.WHITE
+
 
 class PieceState(Enum):
     IDLE = 'idle'

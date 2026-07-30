@@ -9,7 +9,9 @@ these engine internals.
 """
 
 from kfchess.api.dto import BoardSnapshot, MotionInfo, MoveLogEntry, PieceView, Scoreboard
+from kfchess.api.events import EngineEvent, EngineEventKind
 from kfchess.model.piece import Color
+from kfchess.realtime.motion import MoveOutcomeStatus
 
 
 def piece_to_view(piece) -> PieceView:
@@ -57,3 +59,42 @@ def find_piece_by_id(grid, piece_id: int):
             if piece is not None and piece.piece_id == piece_id:
                 return piece
     return None
+
+
+def outcome_to_event(outcome, at_ms: int) -> EngineEvent:
+    """
+    Maps a realtime MoveOutcome onto the outward-facing EngineEvent DTO.
+    Mirrors the beneficiary inversion in GameEngine._scoring_capture: an
+    EXECUTED outcome credits its own piece's color, while a
+    CAPTURED_ON_ARRIVAL outcome credits the *other* color, since the
+    outcome's own piece is the one that got taken.
+    """
+    piece_view = piece_to_view(outcome.piece)
+
+    if outcome.status is MoveOutcomeStatus.ABORTED_PREMOVE:
+        kind = EngineEventKind.MOVE_ABORTED
+        captured, beneficiary_color = None, None
+    elif outcome.status is MoveOutcomeStatus.STOPPED_BY_FRIENDLY:
+        kind = EngineEventKind.MOVE_STOPPED
+        captured, beneficiary_color = None, None
+    elif outcome.status is MoveOutcomeStatus.CAPTURED_ON_ARRIVAL:
+        kind = EngineEventKind.PIECE_CAPTURED
+        captured = piece_view
+        beneficiary_color = outcome.piece.color.opponent().value
+    elif outcome.captured_piece is not None:
+        kind = EngineEventKind.PIECE_CAPTURED
+        captured = piece_to_view(outcome.captured_piece)
+        beneficiary_color = outcome.piece.color.value
+    else:
+        kind = EngineEventKind.MOVE_EXECUTED
+        captured, beneficiary_color = None, None
+
+    return EngineEvent(
+        kind=kind,
+        at_ms=at_ms,
+        piece=piece_view,
+        from_pos=outcome.from_pos,
+        to_pos=outcome.to_pos,
+        captured=captured,
+        beneficiary_color=beneficiary_color,
+    )

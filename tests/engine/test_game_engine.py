@@ -3,7 +3,9 @@ from kfchess.model.board import Board
 from kfchess.model.position import Position
 from kfchess.rules.move_validation import MoveRejectionReason
 from kfchess.rules.rule_engine import RuleEngine
+from kfchess.rules.scoring import ScoringPolicy
 from kfchess.realtime.cooldown import CooldownPolicy
+from kfchess.realtime.motion import MoveOutcome, MoveOutcomeStatus
 from kfchess.realtime.real_time_arbiter import (
     RealTimeArbiter, JUMP_DURATION_MS, MOVE_DURATION_MS_PER_CELL as DEFAULT_MOVE_DELAY_MS,
 )
@@ -21,10 +23,10 @@ def board_with(*pieces_at):
     return Board(grid)
 
 
-def make_engine(board, cooldown_policy=None):
+def make_engine(board, cooldown_policy=None, scoring=None):
     rule_engine = RuleEngine()
     arbiter = RealTimeArbiter(board, rule_engine, cooldown_policy=cooldown_policy)
-    return GameEngine(board, rule_engine, arbiter)
+    return GameEngine(board, rule_engine, arbiter, scoring=scoring)
 
 
 class TestBoardPassthroughs:
@@ -460,3 +462,49 @@ class TestCooldown:
         engine.wait(700)  # total 900ms since landing: jump cooldown now expired
         result = engine.request_move(Position(4, 4), Position(4, 5))
         assert result.is_accepted is True
+
+
+class TestWaitReturnsOutcomes:
+    def test_returns_the_executed_move_outcome(self):
+        rook = Piece('w', PieceKind.ROOK)
+        board = board_with(((0, 0), rook))
+        engine = make_engine(board)
+
+        engine.request_move(Position(0, 0), Position(0, 1))
+        outcomes = engine.wait(DEFAULT_MOVE_DELAY_MS)
+
+        assert len(outcomes) == 1
+        assert isinstance(outcomes[0], MoveOutcome)
+        assert outcomes[0].status is MoveOutcomeStatus.EXECUTED
+        assert outcomes[0].piece is rook
+
+    def test_returns_empty_list_when_nothing_matures(self):
+        board = board_with()
+        engine = make_engine(board)
+
+        assert engine.wait(500) == []
+
+
+class TestCustomScoringPolicy:
+    def test_custom_point_values_are_used_for_capture_scoring(self):
+        attacker = Piece('w', PieceKind.ROOK)
+        target = Piece('b', PieceKind.PAWN)
+        board = board_with(((0, 0), attacker), ((0, 2), target))
+        scoring = ScoringPolicy(point_values={PieceKind.PAWN: 100, PieceKind.KNIGHT: 3, PieceKind.BISHOP: 3, PieceKind.ROOK: 5, PieceKind.QUEEN: 9, PieceKind.KING: 10})
+        engine = make_engine(board, scoring=scoring)
+
+        engine.request_move(Position(0, 0), Position(0, 2))
+        engine.wait(2 * DEFAULT_MOVE_DELAY_MS)
+
+        assert engine.scores()['w'] == 100
+
+    def test_default_scoring_policy_matches_module_level_point_values(self):
+        attacker = Piece('w', PieceKind.ROOK)
+        target = Piece('b', PieceKind.PAWN)
+        board = board_with(((0, 0), attacker), ((0, 2), target))
+        engine = make_engine(board)
+
+        engine.request_move(Position(0, 0), Position(0, 2))
+        engine.wait(2 * DEFAULT_MOVE_DELAY_MS)
+
+        assert engine.scores()['w'] == 1

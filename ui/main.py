@@ -74,9 +74,13 @@ def print_board(session) -> None:
         print(" ".join(row))
 
 
-def _build_scene(window_title: str):
-    """Wires the full render/input/animation stack, returning the pieces both entry points share."""
-    session = create_game_session(STARTING_BOARD)
+def _build_scene(window_title: str, session):
+    """Wires the render/input/animation stack around an injected `session`,
+    returning the pieces both entry points share (the caller already holds
+    `session` itself). `session` satisfies `kfchess.api.GameSession` - a
+    local `EngineGameSession` for `main()`/`run_capture_demo()` below, or a
+    `client.session.RemoteGameSession` from the multiplayer client entry
+    point (`client/main.py`)."""
     click_handler = ClickHandler(session, BoardGeometry(CELL_SIZE_PX))
     animator = PieceAnimator(load_animation_configs(PIECES_DIR))
 
@@ -122,12 +126,13 @@ def _build_scene(window_title: str):
     sound_board = WinsoundSoundBoard({
         "move": MOVE_SOUND_PATH, "capture": CAPTURE_SOUND_PATH, "win": WIN_SOUND_PATH,
     })
-    return session, click_handler, animator, canvas, renderer, sound_board
+    return click_handler, animator, canvas, renderer, sound_board
 
 
 def main() -> None:
     """Real interactive game: a human clicks pieces in the live window to play in real time."""
-    session, click_handler, animator, canvas, renderer, sound_board = _build_scene("Kung-Fu-Chess")
+    session = create_game_session(STARTING_BOARD)
+    click_handler, animator, canvas, renderer, sound_board = _build_scene("Kung-Fu-Chess", session)
 
     print("Starting board:")
     print_board(session)
@@ -148,8 +153,9 @@ def main() -> None:
 
 def run_capture_demo(show_window: bool = True) -> None:
     """Deterministic scripted demo: plays two fixed opening moves and captures every tick to disk."""
-    session, click_handler, animator, canvas, renderer, _sound_board = _build_scene(
-        "Kung-Fu-Chess - Stage 4 motion demo"
+    session = create_game_session(STARTING_BOARD)
+    click_handler, animator, canvas, renderer, _sound_board = _build_scene(
+        "Kung-Fu-Chess - Stage 4 motion demo", session
     )
     live_canvas = canvas if show_window else None
 

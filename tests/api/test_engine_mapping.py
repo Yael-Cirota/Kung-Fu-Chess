@@ -2,9 +2,11 @@ from dataclasses import dataclass
 
 from kfchess.api import engine_mapping
 from kfchess.api.dto import BoardSnapshot, MotionInfo, MoveLogEntry, PieceView, Scoreboard
+from kfchess.api.events import EngineEventKind
 from kfchess.engine.move_log import MoveRecord
 from kfchess.model.piece import Piece, PieceKind
 from kfchess.model.position import Position
+from kfchess.realtime.motion import MoveOutcome, MoveOutcomeStatus
 
 
 def make_piece(color='w', kind=PieceKind.ROOK, cell=Position(0, 0)):
@@ -103,3 +105,65 @@ class TestFindPieceById:
     def test_returns_none_when_not_found(self):
         grid = [[make_piece(), None], [None, None]]
         assert engine_mapping.find_piece_by_id(grid, 999_999) is None
+
+
+class TestOutcomeToEvent:
+    def test_executed_without_capture_maps_to_move_executed(self):
+        piece = make_piece(color='w', kind=PieceKind.ROOK)
+        outcome = MoveOutcome(MoveOutcomeStatus.EXECUTED, piece, Position(0, 0), Position(0, 3))
+
+        event = engine_mapping.outcome_to_event(outcome, at_ms=1000)
+
+        assert event.kind is EngineEventKind.MOVE_EXECUTED
+        assert event.at_ms == 1000
+        assert event.piece.piece_id == piece.piece_id
+        assert event.from_pos == Position(0, 0)
+        assert event.to_pos == Position(0, 3)
+        assert event.captured is None
+        assert event.beneficiary_color is None
+
+    def test_executed_with_capture_credits_the_moving_piece_color(self):
+        attacker = make_piece(color='w', kind=PieceKind.ROOK)
+        captured_piece = make_piece(color='b', kind=PieceKind.PAWN, cell=Position(0, 3))
+        outcome = MoveOutcome(
+            MoveOutcomeStatus.EXECUTED, attacker, Position(0, 0), Position(0, 3),
+            captured_piece=captured_piece,
+        )
+
+        event = engine_mapping.outcome_to_event(outcome, at_ms=2000)
+
+        assert event.kind is EngineEventKind.PIECE_CAPTURED
+        assert event.captured.piece_id == captured_piece.piece_id
+        assert event.beneficiary_color == 'w'
+
+    def test_captured_on_arrival_credits_the_opposing_color(self):
+        # The outcome's own piece is the loser here, so the beneficiary is
+        # the opposite color - mirroring GameEngine._scoring_capture.
+        loser = make_piece(color='b', kind=PieceKind.BISHOP)
+        outcome = MoveOutcome(MoveOutcomeStatus.CAPTURED_ON_ARRIVAL, loser, Position(4, 3), Position(4, 4))
+
+        event = engine_mapping.outcome_to_event(outcome, at_ms=3000)
+
+        assert event.kind is EngineEventKind.PIECE_CAPTURED
+        assert event.captured.piece_id == loser.piece_id
+        assert event.beneficiary_color == 'w'
+
+    def test_stopped_by_friendly_maps_to_move_stopped(self):
+        piece = make_piece(color='w', kind=PieceKind.KING)
+        outcome = MoveOutcome(MoveOutcomeStatus.STOPPED_BY_FRIENDLY, piece, Position(0, 0), Position(0, 0))
+
+        event = engine_mapping.outcome_to_event(outcome, at_ms=4000)
+
+        assert event.kind is EngineEventKind.MOVE_STOPPED
+        assert event.captured is None
+        assert event.beneficiary_color is None
+
+    def test_aborted_premove_maps_to_move_aborted(self):
+        piece = make_piece(color='w', kind=PieceKind.QUEEN)
+        outcome = MoveOutcome(MoveOutcomeStatus.ABORTED_PREMOVE, piece, Position(1, 1), Position(1, 4))
+
+        event = engine_mapping.outcome_to_event(outcome, at_ms=5000)
+
+        assert event.kind is EngineEventKind.MOVE_ABORTED
+        assert event.captured is None
+        assert event.beneficiary_color is None

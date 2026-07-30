@@ -2,6 +2,7 @@ from kfchess.model.piece import PieceKind
 from kfchess.model.position import Position
 from kfchess.realtime.movement_profile import (
     SlidingProfile, JumpingProfile, DEFAULT_MOVEMENT_PROFILES, MOVE_DURATION_MS_PER_CELL,
+    build_movement_profiles,
 )
 
 
@@ -48,3 +49,22 @@ class TestDefaultProfiles:
 
     def test_knight_uses_the_jumping_profile(self):
         assert isinstance(DEFAULT_MOVEMENT_PROFILES[PieceKind.KNIGHT], JumpingProfile)
+
+
+class TestConfigurableMsPerCell:
+    def test_sliding_profile_step_duration_uses_the_injected_ms_per_cell(self):
+        profile = SlidingProfile(ms_per_cell=250)
+        assert profile.step_duration_ms(Position(0, 0), Position(0, 7)) == 250
+
+    def test_jumping_profile_step_duration_scales_with_the_injected_ms_per_cell(self):
+        profile = JumpingProfile(ms_per_cell=250)
+        assert profile.step_duration_ms(Position(4, 4), Position(6, 5)) == 2 * 250
+
+    def test_build_movement_profiles_defaults_to_the_module_constant(self):
+        profiles = build_movement_profiles()
+        assert profiles[PieceKind.ROOK].step_duration_ms(Position(0, 0), Position(0, 1)) == MOVE_DURATION_MS_PER_CELL
+
+    def test_build_movement_profiles_threads_a_custom_value_through_every_kind(self):
+        profiles = build_movement_profiles(ms_per_cell=333)
+        assert profiles[PieceKind.QUEEN].step_duration_ms(Position(0, 0), Position(0, 1)) == 333
+        assert profiles[PieceKind.KNIGHT].step_duration_ms(Position(4, 4), Position(6, 5)) == 2 * 333

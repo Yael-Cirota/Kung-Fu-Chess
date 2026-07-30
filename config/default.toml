@@ -1,0 +1,54 @@
+[engine]
+move_duration_ms_per_cell = 1000
+jump_duration_ms = 1000
+move_cooldown_ms = 1000
+jump_cooldown_ms = 500
+
+[engine.point_values]
+P = 1
+N = 3
+B = 3
+R = 5
+Q = 9
+K = 10
+
+[server]
+host = "127.0.0.1"
+port = 8765
+tick_hz = 100
+broadcast_hz = 20
+max_engine_step_ms = 100
+
+[matchmaking]
+elo_window = 100
+timeout_ms = 60000
+starting_elo = 1200
+k_factor = 32
+
+[connection]
+heartbeat_interval_ms = 3000
+heartbeat_timeout_ms = 10000
+disconnect_grace_ms = 20000
+max_frame_bytes = 16384
+
+[rooms]
+max_viewers = 8
+room_id_length = 6
+
+[database]
+path = "kfchess.db"
+
+[logging]
+level = "INFO"
+client_file = "client.log"
+server_file = "server.log"
+format = "json"
+max_bytes = 1000000
+backup_count = 3
+
+[client]
+fps = 60
+server_url = "ws://127.0.0.1:8765"
+resync_threshold_ms = 1000
+max_catchup_rate = 1.20
+min_catchup_rate = 0.85

@@ -45,6 +45,9 @@ class MovementProfile(ABC):
 class SlidingProfile(MovementProfile):
     """Occupies every square along a straight or diagonal line, one cell per step."""
 
+    def __init__(self, ms_per_cell: int = MOVE_DURATION_MS_PER_CELL):
+        self._ms_per_cell = ms_per_cell
+
     def occupied_path(self, from_pos: Position, to_pos: Position) -> List[Position]:
         step_row = _sign(to_pos.row - from_pos.row)
         step_col = _sign(to_pos.col - from_pos.col)
@@ -58,11 +61,14 @@ class SlidingProfile(MovementProfile):
         return path
 
     def step_duration_ms(self, from_pos: Position, to_pos: Position) -> int:
-        return MOVE_DURATION_MS_PER_CELL
+        return self._ms_per_cell
 
 
 class JumpingProfile(MovementProfile):
     """Hops straight to the destination; intermediate squares are never occupied."""
+
+    def __init__(self, ms_per_cell: int = MOVE_DURATION_MS_PER_CELL):
+        self._ms_per_cell = ms_per_cell
 
     def occupied_path(self, from_pos: Position, to_pos: Position) -> List[Position]:
         return [to_pos]
@@ -70,14 +76,19 @@ class JumpingProfile(MovementProfile):
     def step_duration_ms(self, from_pos: Position, to_pos: Position) -> int:
         # Single step, but its duration spans the whole distance so total
         # flight time stays identical to a slider covering the same reach.
-        return _chebyshev(from_pos, to_pos) * MOVE_DURATION_MS_PER_CELL
+        return _chebyshev(from_pos, to_pos) * self._ms_per_cell
 
 
-DEFAULT_MOVEMENT_PROFILES: Dict[PieceKind, MovementProfile] = {
-    PieceKind.ROOK: SlidingProfile(),
-    PieceKind.BISHOP: SlidingProfile(),
-    PieceKind.QUEEN: SlidingProfile(),
-    PieceKind.KING: SlidingProfile(),
-    PieceKind.PAWN: SlidingProfile(),
-    PieceKind.KNIGHT: JumpingProfile(),
-}
+def build_movement_profiles(ms_per_cell: int = MOVE_DURATION_MS_PER_CELL) -> Dict[PieceKind, MovementProfile]:
+    """Builds a fresh profile mapping tuned to `ms_per_cell`."""
+    return {
+        PieceKind.ROOK: SlidingProfile(ms_per_cell),
+        PieceKind.BISHOP: SlidingProfile(ms_per_cell),
+        PieceKind.QUEEN: SlidingProfile(ms_per_cell),
+        PieceKind.KING: SlidingProfile(ms_per_cell),
+        PieceKind.PAWN: SlidingProfile(ms_per_cell),
+        PieceKind.KNIGHT: JumpingProfile(ms_per_cell),
+    }
+
+
+DEFAULT_MOVEMENT_PROFILES: Dict[PieceKind, MovementProfile] = build_movement_profiles()

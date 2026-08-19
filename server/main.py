@@ -15,7 +15,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Optional, Union
 
-from kfchess.api import EngineConfig, point_values_from_symbols
 from common.config.loader import load_config
 from common.config.schema import AppConfig
 from common.events import EventBus, InMemoryEventBus
@@ -26,9 +25,10 @@ from server.application.auth_service import AuthService, Pbkdf2PasswordHasher
 from server.application.broadcast_observer import BroadcastObserver
 from server.application.disconnect_policy import DisconnectPolicy
 from server.application.elo import EloCalculator
-from server.application.game_room import GameRoom, create_game_room
+from server.application.game_room import GameRoom
 from server.application.match_room_coordinator import MatchRoomCoordinator
 from server.application.matchmaking import MatchmakingService
+from server.application.room_factory import build_room_factory
 from server.application.room_service import RoomService, SecretsRoomIdGenerator
 from server.application.rating_updater import RatingUpdater
 from server.application.room_ticker import RoomTicker
@@ -123,32 +123,13 @@ def build_server(config: AppConfig) -> Server:
     db_executor = ThreadPoolExecutor(max_workers=DB_EXECUTOR_MAX_WORKERS)
     rating_updater = RatingUpdater(
         bus=bus,
-        rooms=rooms,
         users=users,
         game_records=game_records,
         elo_calculator=elo_calculator,
         db_writer=ThreadPoolDbWriter(db_executor),
     )
 
-    engine_config = EngineConfig(
-        move_duration_ms_per_cell=config.engine.move_duration_ms_per_cell,
-        jump_duration_ms=config.engine.jump_duration_ms,
-        move_cooldown_ms=config.engine.move_cooldown_ms,
-        jump_cooldown_ms=config.engine.jump_cooldown_ms,
-        point_values=point_values_from_symbols(config.engine.point_values),
-    )
-
-    def build_room(room_id: str) -> GameRoom:
-        return create_game_room(
-            room_id,
-            config.engine.starting_board,
-            websocket_manager,
-            bus=bus,
-            trace_id_generator=trace_id_generator,
-            engine_config=engine_config,
-            broadcast_hz=config.server.broadcast_hz,
-            max_engine_step_ms=config.server.max_engine_step_ms,
-        )
+    build_room = build_room_factory(config, websocket_manager, bus, trace_id_generator)
 
     # A separate id generator from RoomService's: manually-created rooms get
     # their id from the host's CreateRoomRequest (via RoomService), matchmade

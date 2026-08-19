@@ -21,7 +21,6 @@ ui/frames/
 ui/rendered_board.png
 
 # Claude Code local plan files
-.claude/plans/
 graph.md
 
 # Runtime artifacts

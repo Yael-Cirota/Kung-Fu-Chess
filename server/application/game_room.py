@@ -9,6 +9,7 @@ from common.events import Event, EventBus, EventNames
 from common.tracing import TraceIdGenerator
 from kfchess.api import EngineConfig, EngineEvent, EngineEventKind, GameSession, create_game_session
 from protocol import codec, messages as m
+from server.application.room_service import Role
 from server.domain.connection_id import ConnectionId
 from server.domain.pending_move import PendingMove
 from server.domain.room_status import RoomStatus
@@ -203,9 +204,47 @@ class GameRoom:
         if self._bus is not None:
             await self._bus.publish(Event(
                 name=EventNames.GAME_OVER,
-                payload={"room_id": self.room_id, "reason": "disconnect", "resigned_color": color},
+                payload={
+                    "room_id": self.room_id,
+                    "reason": "disconnect",
+                    "resigned_color": color,
+                    "ended_at_ms": self.session.clock_ms,
+                    **self._seat_id_fields(),
+                },
                 trace_id=self._new_trace_id(),
             ))
+
+    async def abandon(self) -> None:
+        """Server_Design.md §8: a room-server that loses its lease does not
+        try to hand the room off - it ends the game with no winner (settles
+        as a no-Elo draw, since `RatingUpdater._winner_color` returns None for
+        a GAME_OVER carrying neither `resigned_color` nor `engine_event`) and
+        both players requeue. Rebuilding in-flight state on a new owner is not
+        worth it to rescue an average of 45 seconds of play."""
+        if self.status is RoomStatus.ENDED:
+            return
+        self.status = RoomStatus.ENDED
+        if self._bus is not None:
+            await self._bus.publish(Event(
+                name=EventNames.GAME_OVER,
+                payload={
+                    "room_id": self.room_id,
+                    "reason": "server_fault",
+                    "ended_at_ms": self.session.clock_ms,
+                    **self._seat_id_fields(),
+                },
+                trace_id=self._new_trace_id(),
+            ))
+
+    def _seat_id_fields(self) -> dict:
+        """The seat user-ids settlement needs, attached to every GAME_OVER
+        payload at publish time rather than left for the subscriber to fetch
+        via `rooms[room_id]` later (see rating_updater.py's module docstring).
+        Not `ended_at_ms` - the engine-driven path in `emit` has its own
+        `engine_event.at_ms`, which RatingUpdater prefers, so adding a second,
+        unread end-time there would be a value nothing ever consumes."""
+        seats = self.player_user_ids()
+        return {"white_id": seats.get(Role.WHITE), "black_id": seats.get(Role.BLACK)}
 
     def emit(self, event: EngineEvent) -> None:
         """Stays synchronous because kfchess is a synchronous engine and this
@@ -223,11 +262,13 @@ class GameRoom:
         if event.piece is not None and event.piece.piece_id in self._move_trace_ids:
             trace_id = self._move_trace_ids.pop(event.piece.piece_id)
 
-        self._pending_events.append(Event(
-            name=name,
-            payload={"room_id": self.room_id, "engine_event": event},
-            trace_id=trace_id,
-        ))
+        payload = {"room_id": self.room_id, "engine_event": event}
+        if event.kind is EngineEventKind.GAME_OVER:
+            # Attached here, not left for the subscriber to fetch via
+            # rooms[room_id] later - see _seat_id_fields.
+            payload.update(self._seat_id_fields())
+
+        self._pending_events.append(Event(name=name, payload=payload, trace_id=trace_id))
 
     async def _flush_events(self) -> None:
         # Same swap-then-drain shape as _drain: an event published by a handler

@@ -468,6 +468,27 @@ class TestEventBusWiring:
         assert len(received) == 1
         assert room.status is RoomStatus.ENDED
 
+    def test_engine_driven_game_over_payload_carries_settlement_fields(self):
+        bus = InMemoryEventBus()
+        received = []
+        bus.subscribe(EventNames.GAME_OVER, recorder(received))
+
+        room = create_game_room(
+            "room-1", "wR . bK\n. . .\n. . .", FakeWebSocketManager(), bus=bus, max_engine_step_ms=5000,
+        )
+        room.assign_seat("white", WHITE_CONN, user_id=11)
+        room.assign_seat("black", BLACK_CONN, user_id=22)
+        room.enqueue_move(PendingMove("w", Position(0, 0), Position(0, 2), client_seq=1, connection_id=WHITE_CONN))
+        asyncio.run(room.tick(now_ms=0))
+        asyncio.run(room.tick(now_ms=2000))
+
+        assert received[0].payload["white_id"] == 11
+        assert received[0].payload["black_id"] == 22
+        # not ended_at_ms: the engine path's engine_event.at_ms already covers
+        # it, and RatingUpdater always prefers that over the payload field -
+        # see game_room.py's _seat_id_fields
+        assert "ended_at_ms" not in received[0].payload
+
 
 class TestTracing:
     def test_pending_moves_trace_id_reaches_the_move_logged_event(self):
@@ -528,6 +549,62 @@ class TestForceResign:
 
         asyncio.run(room.force_resign("white"))
         asyncio.run(room.force_resign("white"))
+
+        assert len(received) == 1
+
+    def test_payload_carries_seat_ids_and_end_time_for_settlement(self):
+        bus = InMemoryEventBus()
+        received = []
+        bus.subscribe(EventNames.GAME_OVER, recorder(received))
+        room = create_game_room("room-1", "wR . .\n. . .\n. . .", FakeWebSocketManager(), bus=bus)
+        room.assign_seat("white", WHITE_CONN, user_id=11)
+        room.assign_seat("black", BLACK_CONN, user_id=22)
+
+        asyncio.run(room.force_resign("white"))
+
+        assert received[0].payload["white_id"] == 11
+        assert received[0].payload["black_id"] == 22
+        assert received[0].payload["ended_at_ms"] == room.session.clock_ms
+
+
+class TestAbandon:
+    def test_ends_the_room_and_publishes_a_server_fault_game_over(self):
+        bus = InMemoryEventBus()
+        received = []
+        bus.subscribe(EventNames.GAME_OVER, recorder(received))
+        room = create_game_room("room-1", "wR . .\n. . .\n. . .", FakeWebSocketManager(), bus=bus)
+        room.assign_seat("white", WHITE_CONN, user_id=11)
+        room.assign_seat("black", BLACK_CONN, user_id=22)
+
+        asyncio.run(room.abandon())
+
+        assert room.status is RoomStatus.ENDED
+        assert len(received) == 1
+        assert received[0].payload["reason"] == "server_fault"
+        assert "resigned_color" not in received[0].payload
+        assert "engine_event" not in received[0].payload
+        assert received[0].payload["white_id"] == 11
+        assert received[0].payload["black_id"] == 22
+
+    def test_abandon_is_idempotent(self):
+        bus = InMemoryEventBus()
+        received = []
+        bus.subscribe(EventNames.GAME_OVER, recorder(received))
+        room = create_game_room("room-1", "wR . .\n. . .\n. . .", FakeWebSocketManager(), bus=bus)
+
+        asyncio.run(room.abandon())
+        asyncio.run(room.abandon())
+
+        assert len(received) == 1
+
+    def test_abandon_after_force_resign_is_a_no_op(self):
+        bus = InMemoryEventBus()
+        received = []
+        bus.subscribe(EventNames.GAME_OVER, recorder(received))
+        room = create_game_room("room-1", "wR . .\n. . .\n. . .", FakeWebSocketManager(), bus=bus)
+
+        asyncio.run(room.force_resign("white"))
+        asyncio.run(room.abandon())
 
         assert len(received) == 1
 

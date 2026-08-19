@@ -1,11 +1,19 @@
 # Server_Design.md §12.5: this file is target-shaped, not a claim about
 # what runs today. `server` is the existing all-in-one process
 # (server/main.py) and is fully runnable. The five commented-out services
-# below name §2's target per-role processes (server.roles.<role>); those
-# entry points don't exist in code yet (§2 is a Python refactor this
-# compose file doesn't provide), so they're left commented rather than
-# left to fail on `ModuleNotFoundError` at container start. Uncomment them
-# once §2's role split lands - the shape is already correct.
+# below name §2's target per-role processes (server.roles.<role>).
+#
+# §2's role split landed as *code* (server/roles/{room,matchmaker,allocator,
+# settlement}.py build real, tested object graphs; server/roles/gateway.py
+# documents why it can't yet), but none of the five have a standalone
+# `python -m server.roles.<role>` entry point - each is blocked on a piece of
+# cross-process plumbing this pass didn't build: room-server and matchmaker
+# need the ADR-001 gateway relay to ever receive work, the allocator needs an
+# RPC surface, and settlement needs §5's Redis Streams event bus (an
+# in-process EventBus can't be subscribed to from another container).
+# Uncommenting a service here without that plumbing would start a container
+# that idles forever - left commented rather than shipped as something that
+# looks like it works.
 #
 # Redis/Postgres are wired up (§1.1/§2/§5) but unused by `server` today:
 # it still reads/writes kfchess.db via SqliteUserRepository. They're
@@ -27,7 +35,8 @@ services:
     command: ["python", "-m", "server.main"]
     ports: ["8765:8765"]
 
-  # --- target roles (Server_Design.md §2) - need server.roles.* first ---
+  # --- target roles (Server_Design.md §2) - server.roles.* exists but has
+  # no __main__ yet; see the header comment above ---
   # gateway:
   #   <<: *kfchess
   #   command: ["python", "-m", "server.roles.gateway"]

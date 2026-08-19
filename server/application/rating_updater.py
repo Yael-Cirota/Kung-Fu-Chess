@@ -1,22 +1,31 @@
 """Settles a finished game: the one subscriber that turns a GAME_OVER event
 into persisted Elo ratings and a game_records row.
 
-GAME_OVER reaches the bus in two shapes and this handles both:
+GAME_OVER reaches the bus in three shapes and this handles all of them:
   - engine-driven (king captured), payload carries `engine_event`, whose
     `beneficiary_color` is the winning color;
   - forced resign (disconnect grace expired), payload carries `reason` and
-    `resigned_color`, so the winner is the other color.
+    `resigned_color`, so the winner is the other color;
+  - server_fault (GameRoom.abandon - lost its room-server lease, Server_Design.md
+    §8), payload carries neither, so `_winner_color` returns None and it
+    settles as a draw with no Elo change.
+
+Every shape also carries `white_id`/`black_id`/`ended_at_ms` directly on the
+payload - GameRoom attaches them at publish time (see `_settlement_fields` in
+game_room.py) - so settlement never dereferences a live `GameRoom` object.
+That is what lets this subscriber run as its own process (Server_Design.md
+§2's settlement role) with nothing but the event stream: no shared `rooms`
+dict, no room-server co-location required.
 
 Settlement is idempotent per room. A room keeps ticking after a forced
 resign, so the engine can still publish its own GAME_OVER afterwards; only
 the first one for a given room counts.
 """
 
-from typing import Dict, Optional, Set
+from typing import Optional, Set
 
 from common.events import Event, EventBus, EventNames
 from server.application.elo import EloCalculator
-from server.application.game_room import GameRoom
 from server.infrastructure.db_writer import DbWriter, InlineDbWriter
 from server.infrastructure.repositories import GameRecordRepository, UserRepository
 
@@ -35,13 +44,11 @@ class RatingUpdater:
     def __init__(
         self,
         bus: EventBus,
-        rooms: Dict[str, GameRoom],
         users: UserRepository,
         game_records: GameRecordRepository,
         elo_calculator: EloCalculator,
         db_writer: Optional[DbWriter] = None,
     ):
-        self._rooms = rooms
         self._users = users
         self._game_records = game_records
         self._elo_calculator = elo_calculator
@@ -51,18 +58,17 @@ class RatingUpdater:
 
     async def _on_game_over(self, event: Event) -> None:
         room_id = event.payload.get("room_id")
-        room = self._rooms.get(room_id)
-        if room is None or room_id in self._settled:
+        if room_id is None or room_id in self._settled:
             return
 
-        seats = room.player_user_ids()
-        white_id, black_id = seats.get(WHITE), seats.get(BLACK)
+        white_id, black_id = event.payload.get("white_id"), event.payload.get("black_id")
         if white_id is None or black_id is None:
             # An unseated or single-seat room (never matched, or a local test
             # room) has no rated result to settle.
             return
 
         self._settled.add(room_id)
+        seats = {WHITE: white_id, BLACK: black_id}
 
         winner_color = self._winner_color(event)
         winner_id = seats.get(winner_color) if winner_color is not None else None
@@ -74,7 +80,7 @@ class RatingUpdater:
             white_id,
             black_id,
             winner_id,
-            self._ended_at_ms(event, room),
+            self._ended_at_ms(event),
             event.payload.get("reason") or KING_CAPTURED,
         )
 
@@ -87,9 +93,9 @@ class RatingUpdater:
             color = _opponent(resigned_color) if resigned_color in (WHITE, BLACK) else None
         return color if color in (WHITE, BLACK) else None
 
-    def _ended_at_ms(self, event: Event, room: GameRoom) -> int:
+    def _ended_at_ms(self, event: Event) -> int:
         engine_event = event.payload.get("engine_event")
-        return engine_event.at_ms if engine_event is not None else room.session.clock_ms
+        return engine_event.at_ms if engine_event is not None else event.payload["ended_at_ms"]
 
     def _apply_elo(self, winner_id: int, loser_id: int) -> None:
         winner = self._users.find_by_id(winner_id)
